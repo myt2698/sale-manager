@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 20% 97.5%;
+    --foreground: 220 25% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 12%;
+    --primary: 220 60% 33%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 94%;
+    --secondary-foreground: 220 25% 12%;
+    --muted: 220 14% 94%;
+    --muted-foreground: 220 8% 48%;
+    --accent: 220 14% 94%;
+    --accent-foreground: 220 25% 12%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 90%;
+    --input: 220 13% 90%;
+    --ring: 220 60% 33%;
+    --radius: 0.5rem;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 15% 35%;
+    --sidebar-primary: 220 60% 33%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 20% 96%;
+    --sidebar-accent-foreground: 220 60% 33%;
+    --sidebar-border: 220 13% 90%;
+    --sidebar-ring: 220 60% 33%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+/* Sonner toast custom styles */
+[data-sonner-toast] {
+  background: rgba(15, 23, 42, 0.92) !important;
+  border: 1px solid rgba(51, 65, 85, 0.4) !important;
+  color: #f1f5f9 !important;
+  backdrop-filter: blur(8px) !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2) !important;
+}
+
+[data-sonner-toast] [data-title] {
+  color: #f8fafc !important;
+  font-weight: 600 !important;
+}
+
+[data-sonner-toast] [data-description] {
+  color: rgba(241, 245, 249, 0.8) !important;
+}
+
+[data-sonner-toast] [data-icon] {
+  color: #94a3b8 !important;
+}
+
+[data-sonner-toast] [data-close-button] {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #94a3b8 !important;
+  border: none !important;
+}
+
+[data-sonner-toast] [data-close-button]:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Professional scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.35);
+}
+
+/* Table refinements */
+.pro-table th {
+  @apply text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-50/80;
+}
+.pro-table td {
+  @apply text-sm text-slate-700;
+}
