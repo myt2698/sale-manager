@@ -23,6 +23,9 @@ const LS_KEYS = {
   productCategories: "sales-sys-productCategories",
   shipments: "sales-sys-shipments",
   returns: "sales-sys-returns",
+  sampleShipments: "sales-sys-sampleShipments",
+  sampleReturns: "sales-sys-sampleReturns",
+  sampleReminders: "sales-sys-sampleReminders",
   quotationRules: "sales-sys-quotationRules",
   quotationRecords: "sales-sys-quotationRecords",
   reminders: "sales-sys-reminders",
@@ -44,11 +47,31 @@ function saveToLS(key: string, value: any) {
   } catch { /* ignore */ }
 }
 
+function snapshotDesktopState(): Record<string, string> {
+  const state: Record<string, string> = {};
+  for (let index = 0; index < localStorage.length; index++) {
+    const key = localStorage.key(index);
+    if (key && (key.startsWith("sales-sys-") || key === "filename-generator-history")) {
+      const value = localStorage.getItem(key);
+      if (value !== null) state[key] = value;
+    }
+  }
+  return state;
+}
+
+function syncDesktopState() {
+  if (window.desktopAPI) {
+    void window.desktopAPI.saveState(snapshotDesktopState()).catch((error) => {
+      console.error("保存桌面数据失败", error);
+    });
+  }
+}
+
 // Initialize from LocalStorage or use mock data (only first time)
 const isInit = loadFromLS<boolean>(LS_KEYS.initialized, false);
 
 let customers = isInit ? loadFromLS(LS_KEYS.customers, mockCustomers) : [...mockCustomers];
-let sampleOrders = isInit ? loadFromLS(LS_KEYS.sampleOrders, mockSampleOrders) : [...mockSampleOrders];
+let sampleOrders: any[] = isInit ? loadFromLS<any[]>(LS_KEYS.sampleOrders, mockSampleOrders as any[]) : [...mockSampleOrders];
 let salesOrders = isInit ? loadFromLS(LS_KEYS.salesOrders, mockSalesOrders) : [...mockSalesOrders];
 let payments = isInit ? loadFromLS(LS_KEYS.payments, mockPayments) : [...mockPayments];
 let checklists: Record<number, any> = isInit ? loadFromLS(LS_KEYS.checklists, mockChecklists) : { ...mockChecklists };
@@ -56,6 +79,8 @@ let products = isInit ? loadFromLS(LS_KEYS.products, mockProducts) : [...mockPro
 let productCategories = isInit ? loadFromLS(LS_KEYS.productCategories, mockProductCategories) : [...mockProductCategories];
 let shipments: Record<number, any[]> = isInit ? loadFromLS(LS_KEYS.shipments, {}) : {};
 let returns: Record<number, any[]> = isInit ? loadFromLS(LS_KEYS.returns, {}) : {};
+let sampleShipments: Record<number, any[]> = isInit ? loadFromLS(LS_KEYS.sampleShipments, {}) : {};
+let sampleReturns: Record<number, any[]> = isInit ? loadFromLS(LS_KEYS.sampleReturns, {}) : {};
 let quotationRules = isInit ? loadFromLS(LS_KEYS.quotationRules, mockQuotationRules) : [...mockQuotationRules];
 // Ensure "按总价报" special rule always exists
 if (!quotationRules.some((r: any) => r.id === 0)) {
@@ -69,9 +94,33 @@ if (!quotationRules.some((r: any) => r.id === 0)) {
 }
 let quotationRecords: any[] = isInit ? loadFromLS(LS_KEYS.quotationRecords, []) : [];
 let reminders: any[] = isInit ? loadFromLS(LS_KEYS.reminders, []) : [];
+let sampleReminders: any[] = isInit ? loadFromLS(LS_KEYS.sampleReminders, []) : [];
+
+// 订单搜索统一规范化：忽略大小写、全角/半角、空格和常见名称分隔符。
+function normalizeOrderSearchText(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFKC")
+    .toLocaleLowerCase("zh-CN")
+    .replace(/[\s·•\-—_()（）\[\]【】《》<>,，。.、]/g, "");
+}
+
+function resolveOrderCustomerName(order: any): string {
+  const customer = customers.find((item: any) => Number(item.id) === Number(order.customerId));
+  return String(customer?.companyName ?? order.customerName ?? "").trim();
+}
+
+function matchesOrderSearch(order: any, search: unknown): boolean {
+  const keyword = normalizeOrderSearchText(search);
+  if (!keyword) return true;
+  return [order.orderNo, resolveOrderCustomerName(order), order.customerName]
+    .some(value => normalizeOrderSearchText(value).includes(keyword));
+}
+
 // Clean up any corrupted shipment/return records with NaN ids (from old data)
 for (const key of Object.keys(shipments)) { shipments[Number(key)] = (shipments[Number(key)] ?? []).filter((s: any) => !isNaN(Number(s.id))); }
 for (const key of Object.keys(returns)) { returns[Number(key)] = (returns[Number(key)] ?? []).filter((r: any) => !isNaN(Number(r.id))); }
+for (const key of Object.keys(sampleShipments)) { sampleShipments[Number(key)] = (sampleShipments[Number(key)] ?? []).filter((s: any) => !isNaN(Number(s.id))); }
+for (const key of Object.keys(sampleReturns)) { sampleReturns[Number(key)] = (sampleReturns[Number(key)] ?? []).filter((r: any) => !isNaN(Number(r.id))); }
 // Clean up corrupted quotation records
 quotationRecords = quotationRecords.filter((r: any) => !isNaN(Number(r.id)));
 // Backward compat: migrate old sales orders (single product) to items array
@@ -91,6 +140,38 @@ salesOrders.forEach((o: any) => {
   o.quantity = o.items.reduce((sum: number, it: any) => sum + Number(it.quantity), 0);
   o.totalAmount = o.items.reduce((sum: number, it: any) => sum + Number(it.subTotal ?? it.quantity * it.unitPrice), 0).toFixed(2);
 });
+
+// Backward compat: migrate the original lightweight sample-order records to the
+// same shape used by sales orders. Existing imported sample data is preserved.
+sampleOrders.forEach((o: any) => {
+  if (!o.items || !Array.isArray(o.items) || o.items.length === 0) {
+    o.items = [{
+      productId: o.productId ?? null,
+      productName: o.productName ?? "",
+      productCode: o.productCode ?? "",
+      productModel: o.productModel ?? "",
+      quantity: Number(o.quantity ?? 0),
+      unitPrice: Number(o.unitPrice ?? 0),
+      subTotal: Number(o.totalAmount ?? (Number(o.quantity ?? 0) * Number(o.unitPrice ?? 0))),
+    }];
+  }
+  const customer = customers.find((c: any) => c.id === o.customerId);
+  o.customerName = o.customerName || customer?.companyName || "";
+  o.orderDate = o.orderDate || o.createdAt || new Date().toISOString();
+  o.orderStatus = o.orderStatus || o.status || "待排产";
+  o.status = o.orderStatus;
+  o.quantity = o.items.reduce((sum: number, it: any) => sum + Number(it.quantity ?? 0), 0);
+  o.totalAmount = o.items.reduce((sum: number, it: any) => sum + Number(it.subTotal ?? Number(it.quantity ?? 0) * Number(it.unitPrice ?? 0)), 0).toFixed(2);
+  o.receivedAmount = String(Number(o.receivedAmount ?? 0).toFixed(2));
+  o.invoicedAmount = String(Number(o.invoicedAmount ?? 0).toFixed(2));
+  o.balance = Number(o.balance ?? o.totalAmount);
+  o.paymentTerms = String(o.paymentTerms ?? "0");
+  o.contractReviewed = o.contractReviewed ?? true;
+  o.statusHistory = Array.isArray(o.statusHistory) && o.statusHistory.length > 0
+    ? o.statusHistory.map((h: any) => ({ ...h, status: h.status === "待处理" ? "待排产" : h.status }))
+    : [{ status: o.orderStatus, timestamp: o.createdAt || new Date().toISOString() }];
+});
+if (isInit) saveToLS(LS_KEYS.sampleOrders, sampleOrders);
 // Fix: 补全所有 customerName 为空的订单（兼容历史数据）
 let needsSave = false;
 salesOrders.forEach((o: any) => {
@@ -197,7 +278,7 @@ quotationRecords.forEach((r: any) => {
   }
 });
 // Ensure nextId has all required fields (backward compatible with old data)
-const defaultNextId = { customer: 100, sampleOrder: 100, salesOrder: 100, payment: 100, product: 100, shipment: 100, return: 100, quotationRule: 100, quotationRecord: 100, reminder: 100 };
+const defaultNextId = { customer: 100, sampleOrder: 100, salesOrder: 100, payment: 100, product: 100, shipment: 100, return: 100, sampleShipment: 100, sampleReturn: 100, quotationRule: 100, quotationRecord: 100, reminder: 100, sampleReminder: 100 };
 let nextId = isInit ? { ...defaultNextId, ...loadFromLS(LS_KEYS.nextId, defaultNextId) } : { ...defaultNextId };
 // Fix any NaN values caused by old data
 for (const key of Object.keys(defaultNextId)) { if (typeof (nextId as any)[key] !== "number" || isNaN((nextId as any)[key])) (nextId as any)[key] = (defaultNextId as any)[key]; }
@@ -213,9 +294,12 @@ if (!isInit) {
   saveToLS(LS_KEYS.productCategories, productCategories);
   saveToLS(LS_KEYS.shipments, shipments);
   saveToLS(LS_KEYS.returns, returns);
+  saveToLS(LS_KEYS.sampleShipments, sampleShipments);
+  saveToLS(LS_KEYS.sampleReturns, sampleReturns);
   saveToLS(LS_KEYS.quotationRules, quotationRules);
   saveToLS(LS_KEYS.quotationRecords, quotationRecords);
   saveToLS(LS_KEYS.reminders, reminders);
+  saveToLS(LS_KEYS.sampleReminders, sampleReminders);
   saveToLS(LS_KEYS.nextId, nextId);
   saveToLS(LS_KEYS.initialized, true);
 }
@@ -230,10 +314,14 @@ function persistAll() {
   saveToLS(LS_KEYS.productCategories, productCategories);
   saveToLS(LS_KEYS.shipments, shipments);
   saveToLS(LS_KEYS.returns, returns);
+  saveToLS(LS_KEYS.sampleShipments, sampleShipments);
+  saveToLS(LS_KEYS.sampleReturns, sampleReturns);
   saveToLS(LS_KEYS.quotationRules, quotationRules);
   saveToLS(LS_KEYS.quotationRecords, quotationRecords);
   saveToLS(LS_KEYS.reminders, reminders);
+  saveToLS(LS_KEYS.sampleReminders, sampleReminders);
   saveToLS(LS_KEYS.nextId, nextId);
+  syncDesktopState();
 }
 
 // Simple wrapper for static query results (backward compat)
@@ -310,8 +398,9 @@ export function useMockTrpc() {
 
   // --- Dashboard ---
   // Shared dynamic status calculator (same logic as salesOrderList)
-  function calcOrderStatus(order: any): string {
-    const orderShipments = (shipments[order.id] ?? []).map((s: any) => ({
+  function calcOrderStatus(order: any, shipmentStore: Record<number, any[]> = shipments): string {
+    if (order.manualCompleted === true) return "已完成";
+    const orderShipments = (shipmentStore[order.id] ?? []).map((s: any) => ({
       ...s,
       receivingStatus: s.receivingStatus ?? (s.status === "已签收" ? "已签收" : "待签收"),
       paymentStatus: s.paymentStatus ?? (s.status === "全部付款" ? "已支付" : "待支付"),
@@ -390,6 +479,7 @@ export function useMockTrpc() {
         // 本月回款统计
         const monthPayments = payments.filter((p: any) => new Date(p.paymentDate) >= monthStart);
         const monthTotal = monthPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+        const sampleStatuses = sampleOrders.map((o: any) => calcOrderStatus(o, sampleShipments));
 
         return {
           orders: {
@@ -412,6 +502,12 @@ export function useMockTrpc() {
           payments: {
             monthTotal: String(monthTotal.toFixed(2)),
             monthCount: monthPayments.length,
+          },
+          sampleOrders: {
+            total: sampleOrders.length,
+            inProgress: sampleStatuses.filter((s: string) => ["待排产", "生产中"].includes(s)).length,
+            pendingReceipt: sampleStatuses.filter((s: string) => ["待签收", "部分待签收"].includes(s)).length,
+            completed: sampleStatuses.filter((s: string) => s === "已完成").length,
           },
         };
       }),
@@ -613,21 +709,56 @@ export function useMockTrpc() {
   };
 
   // --- Sample Order ---
+  const enrichSampleOrder = (o: any) => {
+    const orderShipments = sampleShipments[o.id] ?? [];
+    const shippedTotal = orderShipments.reduce((sum: number, s: any) => sum + Number(s.quantity ?? 0), 0);
+    const actualShippedQty = orderShipments
+      .filter((s: any) => s.shippingStatus === "已发货")
+      .reduce((sum: number, s: any) => sum + Number(s.quantity ?? 0), 0);
+    const returnedQty = orderShipments.reduce(
+      (sum: number, s: any) => sum + Number(s.returnQuantity ?? 0),
+      0,
+    );
+    const receivedAmount = orderShipments.reduce((sum: number, s: any) => sum + Number(s.receivedAmount ?? 0), 0);
+    const refundedAmount = orderShipments.reduce((sum: number, s: any) => sum + Number(s.refundedAmount ?? 0), 0);
+    const itemsTotal = (o.items ?? []).reduce((sum: number, it: any) => sum + Number(it.subTotal ?? Number(it.quantity ?? 0) * Number(it.unitPrice ?? 0)), 0);
+    const totalAmount = itemsTotal > 0 ? itemsTotal : Number(o.totalAmount ?? 0);
+    const now = Date.now();
+    const isOverdue = orderShipments.some((s: any) =>
+      (s.paymentStatus === "待支付" || s.paymentStatus === "部分付款") &&
+      !!s.paymentDueDate &&
+      new Date(s.paymentDueDate).getTime() < now
+    );
+    return {
+      ...o,
+      customerName: resolveOrderCustomerName(o) || "未知客户",
+      orderStatus: calcOrderStatus(o, sampleShipments),
+      status: calcOrderStatus(o, sampleShipments),
+      totalAmount: totalAmount.toFixed(2),
+      receivedAmount: receivedAmount.toFixed(2),
+      refundedAmount: refundedAmount.toFixed(2),
+      balance: Math.max(0, totalAmount - refundedAmount - receivedAmount),
+      shippedTotal: shippedTotal.toFixed(2),
+      actualShippedQty: actualShippedQty.toFixed(2),
+      returnedQty: returnedQty.toFixed(2),
+      remainingQty: Math.max(0, Number(o.quantity ?? 0) - shippedTotal).toFixed(2),
+      overdueReminderCount: sampleReminders.filter((r: any) => r.orderId === o.id && !r.isHandled && r.remindDate < new Date().toISOString()).length,
+      isOverdue,
+    };
+  };
+
   const sampleOrderList = {
     useQuery: (input?: any, opts?: any) =>
       useMockQuery((input?: any) => {
         const page = input?.page ?? 1;
         const pageSize = input?.pageSize ?? 20;
-        let items = [...sampleOrders];
+        let items = sampleOrders.map(enrichSampleOrder);
         if (input?.search) {
-          const s = input.search.toLowerCase();
-          items = items.filter((o: any) =>
-            o.orderNo.toLowerCase().includes(s) ||
-            (o.customerName ?? "").toLowerCase().includes(s)
-          );
+          items = items.filter((o: any) => matchesOrderSearch(o, input.search));
         }
-        if (input?.status) items = items.filter((o: any) => o.status === input.status);
+        if (input?.status) items = items.filter((o: any) => o.orderStatus === input.status);
         if (input?.customerId) items = items.filter((o: any) => o.customerId === input.customerId);
+        if (input?.isOverdue !== undefined) items = items.filter((o: any) => o.isOverdue === input.isOverdue);
         if (input?.startDate) {
           const start = new Date(input.startDate).getTime();
           items = items.filter((o: any) => {
@@ -642,6 +773,7 @@ export function useMockTrpc() {
             return d <= end;
           });
         }
+        items.sort((a: any, b: any) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
         const offset = (page - 1) * pageSize;
         return {
           items: items.slice(offset, offset + pageSize),
@@ -654,22 +786,70 @@ export function useMockTrpc() {
 
   const sampleOrderGetById = {
     useQuery: (input: { id: number }, opts?: any) =>
-      useMockQuery((input: { id: number }) =>
-        sampleOrders.find((o) => o.id === input.id) ?? null
-      , input, opts),
+      useMockQuery((input: { id: number }) => {
+        const order = sampleOrders.find((o) => o.id === input.id);
+        if (!order) return null;
+        const enriched = enrichSampleOrder(order);
+        const orderShipments = (sampleShipments[input.id] ?? []).map((s: any) => ({
+          ...s,
+          shippingStatus: s.shippingStatus ?? "待发货",
+          receivingStatus: s.receivingStatus ?? "待签收",
+          paymentStatus: s.paymentStatus ?? "待支付",
+          afterSalesStatus: s.afterSalesStatus ?? "无售后",
+          invoiceStatus: s.invoiceStatus ?? "待开票",
+          reconciliationStatus: s.reconciliationStatus ?? "未对账",
+          receivedAmount: s.receivedAmount ?? "0.00",
+          refundedAmount: s.refundedAmount ?? "0.00",
+          paymentDueDate: s.paymentDueDate ?? null,
+        }));
+        const receivedTotal = orderShipments
+          .filter((s: any) => s.receivingStatus === "已签收")
+          .reduce((sum: number, s: any) => sum + Number(s.quantity ?? 0), 0);
+        return {
+          ...enriched,
+          shipments: orderShipments,
+          receivedTotal: receivedTotal.toFixed(2),
+          logistics: null,
+          receipt: null,
+          productionConfirmations: [],
+        };
+      }, input, opts),
   };
 
   const sampleOrderCreate = {
     useMutation: (opts?: any) =>
       useMockMutation((data: any) => {
+        const id = nextId.sampleOrder++;
+        const customer = customers.find((c: any) => c.id === data.customerId);
+        const items = data.items ?? [];
+        const firstItem = items[0] ?? {};
+        const quantity = items.reduce((sum: number, it: any) => sum + Number(it.quantity ?? 0), 0);
+        const totalAmount = items.reduce((sum: number, it: any) => sum + Number(it.subTotal ?? Number(it.quantity ?? 0) * Number(it.unitPrice ?? 0)), 0);
+        const now = new Date().toISOString();
         sampleOrders.unshift({
           ...data,
-          id: nextId.sampleOrder++,
-          status: "待处理",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          id,
+          items,
+          quantity,
+          totalAmount: totalAmount.toFixed(2),
+          productId: firstItem.productId ?? null,
+          productName: firstItem.productName ?? "",
+          productCode: firstItem.productCode ?? "",
+          productModel: firstItem.productModel ?? "",
+          unitPrice: firstItem.unitPrice ?? 0,
+          customerName: customer?.companyName ?? data.customerName ?? "",
+          orderStatus: "待排产",
+          status: "待排产",
+          receivedAmount: "0.00",
+          invoicedAmount: "0.00",
+          balance: totalAmount,
+          isOverdue: false,
+          overdueDays: 0,
+          statusHistory: [{ status: "待排产", timestamp: now }],
+          createdAt: now,
+          updatedAt: now,
         } as any);
-// refresh removed - triggerGlobal handles it
+        return { id };
       }, opts),
   };
 
@@ -678,8 +858,22 @@ export function useMockTrpc() {
       useMockMutation((data: { id: number; data: any }) => {
         const idx = sampleOrders.findIndex((o) => o.id === data.id);
         if (idx >= 0) {
-          sampleOrders[idx] = { ...sampleOrders[idx], ...data.data, updatedAt: new Date().toISOString() } as any;
-  // refresh removed - triggerGlobal handles it
+          const current = sampleOrders[idx] as any;
+          const update = { ...data.data };
+          if (Array.isArray(update.items)) {
+            const firstItem = update.items[0] ?? {};
+            update.quantity = update.items.reduce((sum: number, it: any) => sum + Number(it.quantity ?? 0), 0);
+            update.totalAmount = update.items.reduce((sum: number, it: any) => sum + Number(it.subTotal ?? Number(it.quantity ?? 0) * Number(it.unitPrice ?? 0)), 0).toFixed(2);
+            update.productId = firstItem.productId ?? null;
+            update.productName = firstItem.productName ?? "";
+            update.productCode = firstItem.productCode ?? "";
+            update.productModel = firstItem.productModel ?? "";
+            update.unitPrice = firstItem.unitPrice ?? 0;
+          }
+          if (update.customerId !== undefined) {
+            update.customerName = customers.find((c: any) => c.id === update.customerId)?.companyName ?? current.customerName;
+          }
+          sampleOrders[idx] = { ...current, ...update, updatedAt: new Date().toISOString() } as any;
         }
       }, opts),
   };
@@ -688,24 +882,129 @@ export function useMockTrpc() {
     useMutation: (opts?: any) =>
       useMockMutation((data: { id: number }) => {
         sampleOrders = sampleOrders.filter((o) => o.id !== data.id);
-// refresh removed - triggerGlobal handles it
+        delete sampleShipments[data.id];
+        delete sampleReturns[data.id];
+        sampleReminders = sampleReminders.filter((r: any) => r.orderId !== data.id);
       }, opts),
   };
 
   const sampleOrderUpdateStatus = {
     useMutation: (opts?: any) =>
-      useMockMutation((data: { id: number; status: string; logisticsCompany?: string; logisticsNo?: string; deliveryDate?: string }) => {
+      useMockMutation((data: { id: number; orderStatus?: string; status?: string; logisticsCompany?: string; logisticsNo?: string; shippedDate?: string; deliveryDate?: string }) => {
         const idx = sampleOrders.findIndex((o) => o.id === data.id);
         if (idx >= 0) {
           const order = sampleOrders[idx] as any;
-          order.status = data.status;
+          const status = data.orderStatus ?? data.status ?? order.orderStatus;
+          order.status = status;
+          order.orderStatus = status;
+          order.manualCompleted = status === "已完成";
           if (!order.statusHistory) order.statusHistory = [];
-          order.statusHistory.push({ status: data.status, timestamp: new Date().toISOString() });
-          if (data.logisticsCompany) order.logisticsMethod = data.logisticsCompany;
+          order.statusHistory.push({ status, timestamp: new Date().toISOString() });
+          if (data.logisticsCompany) order.logisticsCompany = data.logisticsCompany;
           if (data.logisticsNo) order.logisticsNo = data.logisticsNo;
-          if (data.deliveryDate) order.deliveryDate = data.deliveryDate;
-  // refresh removed - triggerGlobal handles it
+          if (data.shippedDate || data.deliveryDate) order.shippedDate = data.shippedDate ?? data.deliveryDate;
         }
+      }, opts),
+  };
+
+  const sampleOrderRecordShipment = {
+    useMutation: (opts?: any) =>
+      useMockMutation((data: { orderId: number; quantity: string; productName?: string; logisticsCompany: string; logisticsNo: string }) => {
+        const order = sampleOrders.find((o: any) => o.id === data.orderId);
+        if (!order) throw new Error("样品订单不存在");
+        const orderShipments = sampleShipments[data.orderId] ?? [];
+        const qty = Number(data.quantity);
+        const shippedTotal = orderShipments.reduce((sum: number, s: any) => sum + Number(s.quantity ?? 0), 0);
+        if (!Number.isFinite(qty) || qty <= 0) throw new Error("发货数量必须大于 0");
+        if (shippedTotal + qty > Number(order.quantity)) throw new Error("发货数量超过样品订单剩余数量");
+        order.manualCompleted = false;
+        const isCash = order.paymentTerms === "0" || order.paymentTerms === 0;
+        const now = new Date().toISOString();
+        const shipment = {
+          id: nextId.sampleShipment++,
+          orderId: data.orderId,
+          quantity: qty.toFixed(2),
+          productName: data.productName ?? "",
+          logisticsCompany: data.logisticsCompany,
+          logisticsNo: data.logisticsNo,
+          shippedDate: now,
+          productionDate: now,
+          shippingStatus: "待发货",
+          receivingStatus: "待签收",
+          paymentStatus: "待支付",
+          afterSalesStatus: "无售后",
+          invoiceStatus: "待开票",
+          reconciliationStatus: isCash ? "已对账" : "未对账",
+          flowType: isCash ? "cash" : "credit",
+          receivedAmount: "0.00",
+          refundedAmount: "0.00",
+          paymentDueDate: null,
+        };
+        sampleShipments[data.orderId] = [...orderShipments, shipment];
+        order.logisticsCompany = data.logisticsCompany;
+        order.logisticsNo = data.logisticsNo;
+        return { success: true, shipment };
+      }, opts),
+  };
+
+  const sampleOrderUpdateShipmentStatus = {
+    useMutation: (opts?: any) =>
+      useMockMutation((data: { orderId: number; shipmentId: number; dimension: string; value: string; amount?: string }) => {
+        const shipment = (sampleShipments[data.orderId] ?? []).find((s: any) => Number(s.id) === Number(data.shipmentId));
+        if (!shipment) throw new Error("样品发货记录不存在");
+        shipment[data.dimension] = data.value;
+        shipment[data.dimension.replace("Status", "Date")] = new Date().toISOString();
+        if (data.amount !== undefined && data.dimension === "paymentStatus") {
+          shipment.receivedAmount = Number(data.amount).toFixed(2);
+        }
+      }, opts),
+  };
+
+  const sampleOrderRecordReturn = {
+    useMutation: (opts?: any) =>
+      useMockMutation((data: { orderId: number; shipmentId: number; quantity: string; reason: string }) => {
+        const order = sampleOrders.find((o: any) => o.id === data.orderId);
+        const shipment = (sampleShipments[data.orderId] ?? []).find((s: any) => Number(s.id) === Number(data.shipmentId));
+        if (!order) throw new Error("样品订单不存在");
+        if (!shipment) throw new Error("样品发货记录不存在");
+        if (Number(data.quantity) > Number(shipment.quantity)) throw new Error(`退货数量不能超过该批次发货数量 ${shipment.quantity} kg`);
+        shipment.afterSalesStatus = "售后申请中";
+        shipment.returnQuantity = data.quantity;
+        shipment.returnReason = data.reason;
+        shipment.returnDate = new Date().toISOString();
+        order.orderStatus = "退货中";
+        order.status = "退货中";
+        sampleReturns[data.orderId] = [...(sampleReturns[data.orderId] ?? []), {
+          id: nextId.sampleReturn++, orderId: data.orderId, shipmentId: data.shipmentId,
+          quantity: data.quantity, reason: data.reason, createdAt: new Date().toISOString(),
+        }];
+      }, opts),
+  };
+
+  const sampleOrderUpdateAfterSales = {
+    useMutation: (opts?: any) =>
+      useMockMutation((data: { orderId: number; shipmentId: number; afterSalesStatus: string }) => {
+        const order = sampleOrders.find((o: any) => o.id === data.orderId);
+        const orderShipments = sampleShipments[data.orderId] ?? [];
+        const shipment = orderShipments.find((s: any) => Number(s.id) === Number(data.shipmentId));
+        if (!shipment) throw new Error("样品发货记录不存在");
+        shipment.afterSalesStatus = data.afterSalesStatus;
+        if (data.afterSalesStatus === "售后完成" && order && shipment.returnQuantity) {
+          shipment.refundedAmount = (Number(shipment.returnQuantity) * Number(order.unitPrice ?? 0)).toFixed(2);
+        }
+        if (order && orderShipments.every((s: any) => ["无售后", "售后完成", "售后关闭"].includes(s.afterSalesStatus))) {
+          order.orderStatus = calcOrderStatus(order, sampleShipments);
+          order.status = order.orderStatus;
+        }
+      }, opts),
+  };
+
+  const sampleOrderUpdatePaymentDueDate = {
+    useMutation: (opts?: any) =>
+      useMockMutation((data: { orderId: number; shipmentId: number; paymentDueDate: string }) => {
+        const shipment = (sampleShipments[data.orderId] ?? []).find((s: any) => Number(s.id) === Number(data.shipmentId));
+        if (!shipment) throw new Error("样品发货记录不存在");
+        shipment.paymentDueDate = data.paymentDueDate;
       }, opts),
   };
 
@@ -738,14 +1037,10 @@ export function useMockTrpc() {
           const itemsTotal = (o.items ?? []).reduce((sum: number, it: any) => sum + Number(it.subTotal ?? it.quantity * it.unitPrice), 0);
           const originalTotalAmount = itemsTotal > 0 ? itemsTotal : Math.max(0, Number(o.totalAmount));
           const adjustedReceivedAmount = Math.max(0, orderPaymentsReceived - orderRefundedAmount);
-          // 如果 customerName 为空，根据 customerId 重新查询
-          let customerName = o.customerName;
-          if (!customerName && o.customerId) {
-            const customer = customers.find((c: any) => c.id === o.customerId);
-            customerName = customer?.companyName ?? "";
-          }
+          const customerName = resolveOrderCustomerName(o);
           const orderShipments2 = shipments[o.id] ?? [];
           const actualShippedQty2 = orderShipments2.filter((s: any) => s.shippingStatus === "已发货").reduce((sum: number, s: any) => sum + Number(s.quantity), 0);
+          const returnedQty2 = orderShipments2.reduce((sum: number, s: any) => sum + Number(s.returnQuantity ?? 0), 0);
           return {
             ...o,
             customerName: customerName || "未知客户",
@@ -755,17 +1050,14 @@ export function useMockTrpc() {
             balance: Math.max(0, originalTotalAmount - orderRefundedAmount - orderPaymentsReceived),
             shippedTotal: orderShipments2.reduce((sum: number, s: any) => sum + Number(s.quantity), 0).toFixed(2),
             actualShippedQty: actualShippedQty2.toFixed(2),
+            returnedQty: returnedQty2.toFixed(2),
             orderStatus: calcOrderStatus(o),
             overdueReminderCount,
             isOverdue,
           };
         });
         if (input?.search) {
-          const s = input.search.toLowerCase();
-          items = items.filter((o: any) =>
-            o.orderNo.toLowerCase().includes(s) ||
-            (o.customerName ?? "").toLowerCase().includes(s)
-          );
+          items = items.filter((o: any) => matchesOrderSearch(o, input.search));
         }
         if (input?.status) items = items.filter((o: any) => o.orderStatus === input.status);
         if (input?.customerId) items = items.filter((o: any) => o.customerId === input.customerId);
@@ -816,6 +1108,7 @@ export function useMockTrpc() {
         }));
         const shippedTotal = orderShipments.reduce((sum: number, s: any) => sum + Number(s.quantity), 0);
         const actualShippedQty = orderShipments.filter((s: any) => s.shippingStatus === "已发货").reduce((sum: number, s: any) => sum + Number(s.quantity), 0);
+        const returnedQty = orderShipments.reduce((sum: number, s: any) => sum + Number(s.returnQuantity ?? 0), 0);
         const orderPaymentsReceived = payments.filter((p) => p.orderId === input.id).reduce((s, p) => s + Number(p.amount), 0);
         const orderRefundedAmount = orderShipments.reduce((sum: number, s: any) => sum + Number(s.refundedAmount ?? 0), 0);
         const receivedTotal = orderShipments
@@ -865,6 +1158,7 @@ export function useMockTrpc() {
           shipments: orderShipments,
           shippedTotal: shippedTotal.toFixed(2),
           actualShippedQty: actualShippedQty.toFixed(2),
+          returnedQty: returnedQty.toFixed(2),
           remainingQty: (Number(order.quantity) - shippedTotal).toFixed(2),
           receivedTotal: receivedTotal.toFixed(2),
         };
@@ -1728,6 +2022,151 @@ export function useMockTrpc() {
       }, opts),
   };
 
+  const sampleReminderList = {
+    useQuery: (input?: any, opts?: any) =>
+      useMockQuery((input?: any) => {
+        let items = [...sampleReminders];
+        if (input?.orderId) items = items.filter((r: any) => r.orderId === input.orderId);
+        if (input?.customerId) items = items.filter((r: any) => r.customerId === input.customerId);
+        const now = new Date().toISOString();
+        items = items.map((r: any) => ({ ...r, isOverdue: !r.isHandled && r.remindDate < now }));
+        if (input?.overdueOnly) items = items.filter((r: any) => r.isOverdue);
+        if (input?.pendingOnly || input?.global) items = items.filter((r: any) => !r.isHandled);
+        items.sort((a: any, b: any) => new Date(a.remindDate).getTime() - new Date(b.remindDate).getTime());
+        return { items, total: items.length, page: 1, pageSize: 100 };
+      }, input, opts),
+  };
+
+  const sampleReminderCreate = {
+    useMutation: (opts?: any) =>
+      useMockMutation((data: any) => {
+        const order = sampleOrders.find((o: any) => o.id === data.orderId);
+        const customer = customers.find((c: any) => c.id === (order?.customerId ?? data.customerId));
+        const reminder = {
+          ...data,
+          id: nextId.sampleReminder++,
+          customerId: customer?.id ?? data.customerId ?? 0,
+          customerName: customer?.companyName ?? data.customerName ?? "",
+          orderNo: order?.orderNo ?? data.orderNo ?? "",
+          isHandled: false,
+          createdAt: new Date().toISOString(),
+        };
+        sampleReminders.push(reminder);
+        return reminder;
+      }, opts),
+  };
+
+  const sampleReminderUpdate = {
+    useMutation: (opts?: any) =>
+      useMockMutation((data: any) => {
+        const idx = sampleReminders.findIndex((r: any) => r.id === data.id);
+        if (idx >= 0) sampleReminders[idx] = { ...sampleReminders[idx], ...data };
+      }, opts),
+  };
+
+  const sampleReminderDelete = {
+    useMutation: (opts?: any) =>
+      useMockMutation((data: { id: number }) => {
+        sampleReminders = sampleReminders.filter((r: any) => r.id !== data.id);
+      }, opts),
+  };
+
+  const sampleDashboardStats = {
+    useQuery: (_input?: any, opts?: any) =>
+      useMockQuery(() => {
+        const enriched = sampleOrders.map(enrichSampleOrder);
+        const statuses = enriched.map((o: any) => o.orderStatus);
+        const totalAmount = enriched.reduce((s: number, o: any) => s + Number(o.totalAmount ?? 0), 0);
+        const receivedAmount = enriched.reduce((s: number, o: any) => s + Number(o.receivedAmount ?? 0), 0);
+        const now = new Date();
+        const monthPayments = Object.values(sampleShipments).flat().filter((s: any) =>
+          Number(s.receivedAmount ?? 0) > 0 &&
+          s.paymentDate &&
+          new Date(s.paymentDate).getFullYear() === now.getFullYear() &&
+          new Date(s.paymentDate).getMonth() === now.getMonth()
+        );
+        return {
+          orders: {
+            total: enriched.length,
+            inProgress: statuses.filter((s: string) => ["待排产", "生产中"].includes(s)).length,
+            pendingReceipt: statuses.filter((s: string) => ["待签收", "部分待签收"].includes(s)).length,
+            pendingReconciliation: statuses.filter((s: string) => s === "待对账").length,
+            pendingPayment: statuses.filter((s: string) => s === "待付款").length,
+            completed: statuses.filter((s: string) => s === "已完成").length,
+            afterSales: statuses.filter((s: string) => s === "退货中").length,
+            overdue: enriched.filter((o: any) => o.isOverdue).length,
+            totalAmount: totalAmount.toFixed(2),
+            receivedAmount: receivedAmount.toFixed(2),
+          },
+          customers: { total: 0, active: 0, potential: 0 },
+          payments: {
+            monthTotal: monthPayments.reduce((s: number, p: any) => s + Number(p.receivedAmount ?? 0), 0).toFixed(2),
+            monthCount: monthPayments.length,
+          },
+        };
+      }, undefined, opts),
+  };
+
+  const sampleDashboardArAging = {
+    useQuery: (_input?: any, opts?: any) =>
+      useMockQuery(() => {
+        const buckets: any = {
+          current: { count: 0, amount: 0 },
+          d30: { count: 0, amount: 0 },
+          d60: { count: 0, amount: 0 },
+          d90: { count: 0, amount: 0 },
+          over90: { count: 0, amount: 0 },
+        };
+        const now = Date.now();
+        sampleOrders.map(enrichSampleOrder).forEach((o: any) => {
+          const balance = Number(o.balance ?? 0);
+          if (balance <= 0) return;
+          const dueDates = (sampleShipments[o.id] ?? [])
+            .filter((s: any) => s.paymentDueDate && s.paymentStatus !== "已支付")
+            .map((s: any) => new Date(s.paymentDueDate).getTime());
+          const earliest = dueDates.length ? Math.min(...dueDates) : Number.POSITIVE_INFINITY;
+          const days = earliest === Number.POSITIVE_INFINITY ? 0 : Math.max(0, Math.floor((now - earliest) / 86400000));
+          const bucket = days <= 0 ? buckets.current : days <= 30 ? buckets.d30 : days <= 60 ? buckets.d60 : days <= 90 ? buckets.d90 : buckets.over90;
+          bucket.count += 1;
+          bucket.amount += balance;
+        });
+        return buckets;
+      }, undefined, opts),
+  };
+
+  const sampleDashboardOverdueOrders = {
+    useQuery: (_input?: any, opts?: any) =>
+      useMockQuery(() => sampleOrders.map(enrichSampleOrder).filter((o: any) => o.isOverdue).map((o: any) => {
+        const dueDates = (sampleShipments[o.id] ?? [])
+          .filter((s: any) => s.paymentDueDate && s.paymentStatus !== "已支付")
+          .map((s: any) => new Date(s.paymentDueDate).getTime());
+        const earliest = dueDates.length ? Math.min(...dueDates) : Date.now();
+        return { ...o, overdueDays: Math.max(0, Math.floor((Date.now() - earliest) / 86400000)) };
+      }), undefined, opts),
+  };
+
+  const sampleFinanceListPayments = {
+    useQuery: (_input?: any, opts?: any) =>
+      useMockQuery(() => {
+        const items = Object.values(sampleShipments).flat()
+          .filter((s: any) => Number(s.receivedAmount ?? 0) > 0)
+          .map((s: any) => {
+            const order = sampleOrders.find((o: any) => o.id === s.orderId);
+            return {
+              id: s.id,
+              paymentNo: `SP-PAY-${s.id}`,
+              orderId: s.orderId,
+              orderNo: order?.orderNo ?? "",
+              customerName: order?.customerName ?? "",
+              amount: s.receivedAmount,
+              paymentMethod: "批次回款",
+              paymentDate: s.paymentDate ?? s.updatedAt ?? s.shippedDate,
+            };
+          });
+        return { items, total: items.length, page: 1, pageSize: 9999 };
+      }, undefined, opts),
+  };
+
   // --- Products ---
   const productList = {
     useQuery: (input?: any, opts?: any) =>
@@ -1900,6 +2339,11 @@ export function useMockTrpc() {
       update: sampleOrderUpdate,
       delete: sampleOrderDelete,
       updateStatus: sampleOrderUpdateStatus,
+      recordShipment: sampleOrderRecordShipment,
+      updateShipmentStatus: sampleOrderUpdateShipmentStatus,
+      recordReturn: sampleOrderRecordReturn,
+      updateAfterSales: sampleOrderUpdateAfterSales,
+      updatePaymentDueDate: sampleOrderUpdatePaymentDueDate,
     },
     salesOrder: {
       list: salesOrderList,
@@ -1946,6 +2390,20 @@ export function useMockTrpc() {
       create: reminderCreate,
       update: reminderUpdate,
       delete: reminderDelete,
+    },
+    sampleReminder: {
+      list: sampleReminderList,
+      create: sampleReminderCreate,
+      update: sampleReminderUpdate,
+      delete: sampleReminderDelete,
+    },
+    sampleDashboard: {
+      stats: sampleDashboardStats,
+      arAging: sampleDashboardArAging,
+      overdueOrders: sampleDashboardOverdueOrders,
+    },
+    sampleFinance: {
+      listPayments: sampleFinanceListPayments,
     },
     useUtils: () => utils,
   };

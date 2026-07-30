@@ -26,6 +26,7 @@ import {
   TrendingUp,
   Eye,
   EyeOff,
+  DatabaseBackup,
 } from "lucide-react";
 
 // 保密模式 Context
@@ -70,10 +71,13 @@ const navItems = [
   { path: "/customers", label: "客户管理", icon: Users },
   { path: "/quotation-records", label: "报价记录", icon: TrendingUp },
   { path: "/sales-orders", label: "销售订单", icon: ShoppingCart },
+  { path: "/sample-orders", label: "样品订单", icon: Package },
   { path: "/finance", label: "回款管理", icon: DollarSign },
-  { path: "/reports", label: "报表中心", icon: BarChart3 },
+  { path: "/reports", label: "销售报表中心", icon: BarChart3 },
+  { path: "/sample-reports", label: "样品报表中心", icon: FileText },
   { path: "/products", label: "产品管理", icon: Package },
   { path: "/filename-generator", label: "文件命名", icon: FileCode },
+  { path: "/data-management", label: "数据与备份", icon: DatabaseBackup },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -115,13 +119,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const trpc = useMockTrpc();
   const { data: globalRemindersData, refetch: refetchGlobalReminders } = trpc.reminder.list.useQuery({ global: true, overdueOnly: true });
+  const { data: globalSampleRemindersData, refetch: refetchGlobalSampleReminders } = trpc.sampleReminder.list.useQuery({ global: true, overdueOnly: true });
   const overdueReminderCount = globalRemindersData?.items?.length ?? 0;
+  const overdueSampleReminderCount = globalSampleRemindersData?.items?.length ?? 0;
 
   useEffect(() => {
-    const handler = () => { refetchGlobalReminders(); };
+    const handler = () => { refetchGlobalReminders(); refetchGlobalSampleReminders(); };
     window.addEventListener("mock-refresh", handler);
     return () => window.removeEventListener("mock-refresh", handler);
-  }, [refetchGlobalReminders]);
+  }, [refetchGlobalReminders, refetchGlobalSampleReminders]);
 
   return (
     <PrivacyContext.Provider value={{ privacyMode, toggle: togglePrivacy }}>
@@ -164,7 +170,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {navItems.map((item) => {
             const isActive = location.pathname === item.path || (item.path === "/quotation-records" && location.pathname === "/quotation-rules");
             const Icon = item.icon;
-            const showReminderBadge = item.path === "/sales-orders" && overdueReminderCount > 0;
+            const itemReminderCount = item.path === "/sales-orders"
+              ? overdueReminderCount
+              : item.path === "/sample-orders"
+                ? overdueSampleReminderCount
+                : 0;
+            const showReminderBadge = itemReminderCount > 0;
             return (
               <Link
                 key={item.path}
@@ -180,7 +191,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <Icon size={18} strokeWidth={isActive ? 2 : 1.5} />
                   {showReminderBadge && (
                     <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                      {overdueReminderCount > 99 ? "99+" : overdueReminderCount}
+                      {itemReminderCount > 99 ? "99+" : itemReminderCount}
                     </span>
                   )}
                 </div>

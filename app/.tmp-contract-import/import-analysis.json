@@ -1,0 +1,895 @@
+{
+  "source": {
+    "contractCount": 38,
+    "productLineCount": 46,
+    "uniqueCustomerCount": 25,
+    "uniqueProductCount": 16,
+    "multiProductContracts": [
+      {
+        "contractNo": "QXHZ202600047",
+        "productCount": 2
+      },
+      {
+        "contractNo": "QXHZ202600045",
+        "productCount": 2
+      },
+      {
+        "contractNo": "QXHZ202600036",
+        "productCount": 2
+      },
+      {
+        "contractNo": "QXHZ202600031",
+        "productCount": 2
+      },
+      {
+        "contractNo": "QXHZ202600005",
+        "productCount": 2
+      },
+      {
+        "contractNo": "QSC-202601-0002",
+        "productCount": 2
+      },
+      {
+        "contractNo": "QSC-2025012-0005",
+        "productCount": 3
+      }
+    ],
+    "missingCustomer": [],
+    "missingStartDate": [],
+    "missingProducts": [],
+    "invalidProducts": [],
+    "duplicateContractNos": []
+  },
+  "existing": {
+    "customerCount": 14,
+    "productCount": 10,
+    "categoryCount": 4,
+    "categories": [
+      {
+        "id": 1,
+        "name": "锡膏"
+      },
+      {
+        "id": 2,
+        "name": "锡丝"
+      },
+      {
+        "id": 3,
+        "name": "锡条"
+      },
+      {
+        "id": 4,
+        "name": "金属粉"
+      }
+    ],
+    "sampleOrderCount": 0,
+    "alreadyImported": []
+  },
+  "matching": {
+    "existingCustomers": [
+      "浙江嘉利工业有限公司",
+      "杭州江湾智能科技有限公司",
+      "昆山天赞电子科技有限公司",
+      "杭州亘幄智能科技有限公司",
+      "上海洛联实业有限公司",
+      "浙江亚通新材料股份有限公司",
+      "宁波发特电机有限公司",
+      "广东嘉利车灯有限公司",
+      "桐庐新禹电子有限公司"
+    ],
+    "newCustomers": [
+      "四川长虹精密电子科技有限公司",
+      "广东万颗子智控科技有限公司",
+      "云创智算（浙江）装备科技有限公司",
+      "浙江立为电子科技有限公司",
+      "中电海康集团有限公司",
+      "杭州海康威视数字技术股份有限公司",
+      "杭州卓鼎智控科技有限公司",
+      "芜湖协鑫集成新能源科技有限公司",
+      "浙江达峰科技有限公司",
+      "苏州彤帆智能科技有限公司",
+      "杭州君灿电子有限公司",
+      "杭州爱康科乐科技有限公司",
+      "上海任威电子科技有限公司",
+      "深圳市海能达新材料有限公司",
+      "杭州成丰电子科技有限公司",
+      "杭州润村科技有限公司"
+    ]
+  },
+  "contracts": [
+    {
+      "contractNo": "QXHZ202600057",
+      "startDate": "2026-07-20T16:00:00.000Z",
+      "customerName": "浙江嘉利工业有限公司",
+      "customerCode": "QXCS00022",
+      "customerOrderNo": "",
+      "shippingAddress": "",
+      "products": [
+        {
+          "productName": "PASTE SAMPLE P/N",
+          "productCode": "PASTEOT-800100",
+          "productModel": "FOR ANY SAMPLE PASTE",
+          "quantity": 1,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600053",
+      "startDate": "2026-06-29T16:00:00.000Z",
+      "customerName": "浙江嘉利工业有限公司",
+      "customerCode": "QXCS00022",
+      "customerOrderNo": "",
+      "shippingAddress": "",
+      "products": [
+        {
+          "productName": "PASTE SAMPLE P/N",
+          "productCode": "PASTEOT-800100",
+          "productModel": "FOR ANY SAMPLE PASTE",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600052",
+      "startDate": "2026-06-29T16:00:00.000Z",
+      "customerName": "杭州江湾智能科技有限公司",
+      "customerCode": "QXCS00017",
+      "customerOrderNo": "",
+      "shippingAddress": "",
+      "products": [
+        {
+          "productName": "Q88",
+          "productCode": "PASTEOT-808803-JAR",
+          "productModel": "Sn98.5Ag1.0Cu0.5/T4/Q88/88.25%",
+          "quantity": 0.25,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600051",
+      "startDate": "2026-06-28T16:00:00.000Z",
+      "customerName": "昆山天赞电子科技有限公司",
+      "customerCode": "QXCS00032",
+      "customerOrderNo": "",
+      "shippingAddress": "",
+      "products": [
+        {
+          "productName": "Q88",
+          "productCode": "PASTEOT-808805-JAR",
+          "productModel": "Sn96.5Ag3.0Cu0.5/T4/Q88/88.25%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600048",
+      "startDate": "2026-06-21T16:00:00.000Z",
+      "customerName": "杭州亘幄智能科技有限公司",
+      "customerCode": "QXCS00028",
+      "customerOrderNo": "",
+      "shippingAddress": "刘惠荣  18268168756 华东 浙江 杭州市余杭区瓶窑镇蒿山头47号山科智慧园 A幢1楼101西门货架",
+      "products": [
+        {
+          "productName": "Q88",
+          "productCode": "PASTEOT-808806-JAR",
+          "productModel": "Sn96.5Ag3.0Cu0.5/T4/Q88/88.5%",
+          "quantity": 0.25,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600047",
+      "startDate": "2026-06-16T16:00:00.000Z",
+      "customerName": "浙江嘉利工业有限公司",
+      "customerCode": "QXCS00022",
+      "customerOrderNo": "",
+      "shippingAddress": "",
+      "products": [
+        {
+          "productName": "V77",
+          "productCode": "PASTEOT-807702-JAR",
+          "productModel": "Sn96.5Ag3.0Cu0.5/T4/V77/88.5%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        },
+        {
+          "productName": "V77",
+          "productCode": "PASTEOT-807701-JAR",
+          "productModel": "Sn96.5Ag3.0Cu0.5/T4/V77/88.25",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600046",
+      "startDate": "2026-06-11T16:00:00.000Z",
+      "customerName": "四川长虹精密电子科技有限公司",
+      "customerCode": "QXCS00029",
+      "customerOrderNo": "",
+      "shippingAddress": "刘汉华  13510491839 华南 广东 中山市南山区上塘大街26号",
+      "products": [
+        {
+          "productName": "Y89",
+          "productCode": "PASTEOT-808905-Jar",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.25%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600045",
+      "startDate": "2026-06-11T16:00:00.000Z",
+      "customerName": "广东万颗子智控科技有限公司",
+      "customerCode": "QXCS00030",
+      "customerOrderNo": "",
+      "shippingAddress": "刘汉华  13510491839 华南 广东 中山市南山区上塘大街26号",
+      "products": [
+        {
+          "productName": "Y89",
+          "productCode": "PASTEOT-808905-Jar",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.25%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        },
+        {
+          "productName": "Y89",
+          "productCode": "PASTEOT-808903-JAR",
+          "productModel": "Sn98.5Ag1.0Cu0.5/T4/Y89/88.25%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600042",
+      "startDate": "2026-06-10T16:00:00.000Z",
+      "customerName": "杭州亘幄智能科技有限公司",
+      "customerCode": "QXCS00028",
+      "customerOrderNo": "",
+      "shippingAddress": "",
+      "products": [
+        {
+          "productName": "Y89",
+          "productCode": "PASTEOT-808905-Jar",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.25%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600041",
+      "startDate": "2026-06-10T16:00:00.000Z",
+      "customerName": "上海洛联实业有限公司",
+      "customerCode": "QXCS00002",
+      "customerOrderNo": "",
+      "shippingAddress": "郭林林  18682287375 华南 广东 深圳深圳市宝安区兴业路3012号老兵大厦西（二）座6003室",
+      "products": [
+        {
+          "productName": "Y89 LL专用",
+          "productCode": "PASTEOT-808907-JAR",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.35%",
+          "quantity": 10,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600040",
+      "startDate": "2026-06-09T16:00:00.000Z",
+      "customerName": "云创智算（浙江）装备科技有限公司",
+      "customerCode": "QXCS00019",
+      "customerOrderNo": "",
+      "shippingAddress": "朱伟韬  15700011866 华东 浙江 杭州市浙江省杭州市拱墅区半山路345号云创智算四楼",
+      "products": [
+        {
+          "productName": "Y89",
+          "productCode": "PASTEOT-808905-Jar",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.25%",
+          "quantity": 0.25,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600039",
+      "startDate": "2026-06-09T16:00:00.000Z",
+      "customerName": "浙江亚通新材料股份有限公司",
+      "customerCode": "QXCS00001",
+      "customerOrderNo": "",
+      "shippingAddress": "",
+      "products": [
+        {
+          "productName": "Y89",
+          "productCode": "PASTEOT-808905-Jar",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.25%",
+          "quantity": 0.25,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600036",
+      "startDate": "2026-06-07T16:00:00.000Z",
+      "customerName": "浙江立为电子科技有限公司",
+      "customerCode": "QXCS00027",
+      "customerOrderNo": "",
+      "shippingAddress": "",
+      "products": [
+        {
+          "productName": "Y89",
+          "productCode": "PASTEOT-808905-Jar",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.25%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        },
+        {
+          "productName": "Y89",
+          "productCode": "PASTEOT-808901-JAR",
+          "productModel": "Sn99Ag0.3Cu0.7/T4/Y89/88.25%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600035",
+      "startDate": "2026-06-07T16:00:00.000Z",
+      "customerName": "宁波发特电机有限公司",
+      "customerCode": "QXCS00026",
+      "customerOrderNo": "",
+      "shippingAddress": "王德胜  15867387419 华东 浙江 宁波市浙江省宁波市慈溪龙山镇龙镇大道266号",
+      "products": [
+        {
+          "productName": "PASTE SAMPLE P/N",
+          "productCode": "PASTEOT-800100",
+          "productModel": "FOR ANY SAMPLE PASTE",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600034",
+      "startDate": "2026-06-03T16:00:00.000Z",
+      "customerName": "云创智算（浙江）装备科技有限公司",
+      "customerCode": "QXCS00019",
+      "customerOrderNo": "",
+      "shippingAddress": "朱伟韬  15700011866 华东 浙江 杭州市浙江省杭州市拱墅区半山路345号云创智算四楼",
+      "products": [
+        {
+          "productName": "PASTE SAMPLE P/N",
+          "productCode": "PASTEOT-800100",
+          "productModel": "FOR ANY SAMPLE PASTE",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600032",
+      "startDate": "2026-06-01T16:00:00.000Z",
+      "customerName": "中电海康集团有限公司",
+      "customerCode": "QXCS00024",
+      "customerOrderNo": "",
+      "shippingAddress": "沈磊  13634167369 华东 浙江 杭州市余杭区文福路9号中电海康集团公司B座",
+      "products": [
+        {
+          "productName": "PASTE SAMPLE P/N",
+          "productCode": "PASTEOT-800100",
+          "productModel": "FOR ANY SAMPLE PASTE",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600031",
+      "startDate": "2026-05-20T16:00:00.000Z",
+      "customerName": "广东嘉利车灯有限公司",
+      "customerCode": "QXCS00021",
+      "customerOrderNo": "",
+      "shippingAddress": "钟洪超  18998597881 华南 广东 肇庆市高要区金利镇金湾南路9号广东嘉利",
+      "products": [
+        {
+          "productName": "Y89",
+          "productCode": "PASTEOT-808905-Jar",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.25%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        },
+        {
+          "productName": "Y89",
+          "productCode": "PASTEOT-808905-Jar",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.25%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600030",
+      "startDate": "2026-05-19T16:00:00.000Z",
+      "customerName": "浙江立为电子科技有限公司",
+      "customerCode": "QXCS00027",
+      "customerOrderNo": "",
+      "shippingAddress": "",
+      "products": [
+        {
+          "productName": "Y89",
+          "productCode": "PASTEOT-808905-Jar",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.25%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600028",
+      "startDate": "2026-05-17T16:00:00.000Z",
+      "customerName": "云创智算（浙江）装备科技有限公司",
+      "customerCode": "QXCS00019",
+      "customerOrderNo": "",
+      "shippingAddress": "朱伟韬  15700011866 华东 浙江 杭州市浙江省杭州市拱墅区半山路345号云创智算四楼",
+      "products": [
+        {
+          "productName": "Y89",
+          "productCode": "PASTEOT-808905-Jar",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.25%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600023",
+      "startDate": "2026-05-07T16:00:00.000Z",
+      "customerName": "宁波发特电机有限公司",
+      "customerCode": "QXCS00026",
+      "customerOrderNo": "",
+      "shippingAddress": "王德胜  15867387419 华东 浙江 宁波市浙江省宁波市慈溪龙山镇龙镇大道266号",
+      "products": [
+        {
+          "productName": "Y89",
+          "productCode": "PASTEOT-808901-JAR",
+          "productModel": "Sn99Ag0.3Cu0.7/T4/Y89/88.25%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600022",
+      "startDate": "2026-05-06T16:00:00.000Z",
+      "customerName": "中电海康集团有限公司",
+      "customerCode": "QXCS00024",
+      "customerOrderNo": "",
+      "shippingAddress": "",
+      "products": [
+        {
+          "productName": "PASTE SAMPLE P/N",
+          "productCode": "PASTEOT-800100",
+          "productModel": "FOR ANY SAMPLE PASTE",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600021",
+      "startDate": "2026-05-05T16:00:00.000Z",
+      "customerName": "杭州海康威视数字技术股份有限公司",
+      "customerCode": "QXCS00025",
+      "customerOrderNo": "",
+      "shippingAddress": "陈东  18969188861 华东 浙江 杭州市杭州桐庐县求是路299号海康威视A1码头",
+      "products": [
+        {
+          "productName": "Y89",
+          "productCode": "PASTEOT-808903-JAR",
+          "productModel": "Sn98.5Ag1.0Cu0.5/T4/Y89/88.25%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600017",
+      "startDate": "2026-04-12T16:00:00.000Z",
+      "customerName": "杭州卓鼎智控科技有限公司",
+      "customerCode": "QXCS00016",
+      "customerOrderNo": "",
+      "shippingAddress": "单总  17606509496 华东 浙江 杭州市浙江省杭州市余杭区闲林街道闲兴路25号",
+      "products": [
+        {
+          "productName": "锡膏",
+          "productCode": "808906-ZD",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.85%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600025",
+      "startDate": "2026-04-09T16:00:00.000Z",
+      "customerName": "芜湖协鑫集成新能源科技有限公司",
+      "customerCode": "QXCS00020",
+      "customerOrderNo": "",
+      "shippingAddress": "桑士武  18626164205 华东 安徽 芜湖市安徽省芜湖市湾址区城东新城二期荷塘月色小区6号楼608",
+      "products": [
+        {
+          "productName": "PASTE SAMPLE P/N",
+          "productCode": "PASTEOT-800100",
+          "productModel": "FOR ANY SAMPLE PASTE",
+          "quantity": 1,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600015",
+      "startDate": "2026-04-08T16:00:00.000Z",
+      "customerName": "杭州江湾智能科技有限公司",
+      "customerCode": "QXCS00017",
+      "customerOrderNo": "",
+      "shippingAddress": "宋瑞行  15268552216 华东 浙江 杭州市杭州市钱塘区河庄工业区河中路（联声工业园2幢3楼）",
+      "products": [
+        {
+          "productName": "锡膏",
+          "productCode": "PASTEOT-808905-Jar(TP)",
+          "productModel": "SN98.5AG1.0CU0.5/T4/Y89/88.35%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600013",
+      "startDate": "2026-04-07T16:00:00.000Z",
+      "customerName": "云创智算（浙江）装备科技有限公司",
+      "customerCode": "QXCS00019",
+      "customerOrderNo": "",
+      "shippingAddress": "朱伟韬  15700011866 华东 浙江 杭州市浙江省杭州市拱墅区半山路345号云创智算四楼",
+      "products": [
+        {
+          "productName": "锡膏",
+          "productCode": "PASTEOT-808904-JAR（TP)",
+          "productModel": "SASN99AG0.3CU0.7/T4/Y89/88.35%",
+          "quantity": 1,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600010",
+      "startDate": "2026-03-31T16:00:00.000Z",
+      "customerName": "云创智算（浙江）装备科技有限公司",
+      "customerCode": "QXCS00019",
+      "customerOrderNo": "",
+      "shippingAddress": "朱伟韬  15700011866 华东 浙江 杭州市浙江省杭州市拱墅区半山路345号云创智算四楼",
+      "products": [
+        {
+          "productName": "锡膏",
+          "productCode": "PASTEOT-808905-Jar(TP)",
+          "productModel": "SN98.5AG1.0CU0.5/T4/Y89/88.35%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600008",
+      "startDate": "2026-03-29T16:00:00.000Z",
+      "customerName": "浙江达峰科技有限公司",
+      "customerCode": "QXCS00003",
+      "customerOrderNo": "",
+      "shippingAddress": "徐工  15868489388 华东 浙江 杭州市杭州余杭区五常街道五常大道158号",
+      "products": [
+        {
+          "productName": "锡膏",
+          "productCode": "PASTEOT-808904-JAR（TP)",
+          "productModel": "SASN99AG0.3CU0.7/T4/Y89/88.35%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600007",
+      "startDate": "2026-03-23T16:00:00.000Z",
+      "customerName": "苏州彤帆智能科技有限公司",
+      "customerCode": "QXCS00018",
+      "customerOrderNo": "",
+      "shippingAddress": "",
+      "products": [
+        {
+          "productName": "锡膏",
+          "productCode": "PASTEOT-808907-Jar(TP)",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.5%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QXHZ202600005",
+      "startDate": "2026-03-10T16:00:00.000Z",
+      "customerName": "杭州卓鼎智控科技有限公司",
+      "customerCode": "QXCS00016",
+      "customerOrderNo": "",
+      "shippingAddress": "",
+      "products": [
+        {
+          "productName": "锡膏",
+          "productCode": "PASTEOT-808904-JAR（TP)",
+          "productModel": "SASN99AG0.3CU0.7/T4/Y89/88.35%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        },
+        {
+          "productName": "Y89 LL专用",
+          "productCode": "PASTEOT-808907-JAR",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.35%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QSC-202602-0001",
+      "startDate": "2026-02-04T16:00:00.000Z",
+      "customerName": "浙江达峰科技有限公司",
+      "customerCode": "QXCS00003",
+      "customerOrderNo": "",
+      "shippingAddress": "徐工  15868489388 华东 浙江 杭州市杭州余杭区五常街道五常大道158号",
+      "products": [
+        {
+          "productName": "Y89 LL专用",
+          "productCode": "PASTEOT-808907-JAR",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.35%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QSC-202601-0003",
+      "startDate": "2026-01-25T16:00:00.000Z",
+      "customerName": "杭州君灿电子有限公司",
+      "customerCode": "QXCS00012",
+      "customerOrderNo": "",
+      "shippingAddress": "杜彩虹  19967433007 华东 浙江 杭州市浙江省杭州市余杭区仁和街道洛阳路1号4幢4层407、408室",
+      "products": [
+        {
+          "productName": "锡膏",
+          "productCode": "PASTEOT-808904-JAR（TP)",
+          "productModel": "SASN99AG0.3CU0.7/T4/Y89/88.35%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QSC-202601-0002",
+      "startDate": "2026-01-21T16:00:00.000Z",
+      "customerName": "杭州爱康科乐科技有限公司",
+      "customerCode": "QXCS00010",
+      "customerOrderNo": "",
+      "shippingAddress": "余联鸣  15606718611 华东 浙江 杭州市浙江省杭州市临安区太阳镇太阳村扶善",
+      "products": [
+        {
+          "productName": "锡膏",
+          "productCode": "PASTEOT-809203-Jar（B)",
+          "productModel": "Sn55Pb45/T3/Y92/90%(131)",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        },
+        {
+          "productName": "锡膏",
+          "productCode": "PASTEOT-809201-jar(TP)",
+          "productModel": "SN63PB37/T4/Y92/90%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QSC-202601-0001",
+      "startDate": "2026-01-08T16:00:00.000Z",
+      "customerName": "桐庐新禹电子有限公司",
+      "customerCode": "QXCS00005",
+      "customerOrderNo": "",
+      "shippingAddress": "王华清  13777426022 华东 浙江 杭州市浙江省杭州市桐庐县江南镇珠山村王家",
+      "products": [
+        {
+          "productName": "锡膏",
+          "productCode": "PASTEOT-809201-jar(TP)",
+          "productModel": "SN63PB37/T4/Y92/90%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QSC-2025012-0005",
+      "startDate": "2025-12-01T16:00:00.000Z",
+      "customerName": "上海任威电子科技有限公司",
+      "customerCode": "QXCS00009",
+      "customerOrderNo": "",
+      "shippingAddress": "",
+      "products": [
+        {
+          "productName": "Y89 LL专用",
+          "productCode": "PASTEOT-808907-JAR",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.35%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        },
+        {
+          "productName": "Y89 LL专用",
+          "productCode": "PASTEOT-808907-JAR",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.35%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        },
+        {
+          "productName": "Y89 LL专用",
+          "productCode": "PASTEOT-808907-JAR",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.35%",
+          "quantity": 2,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QSC-2025012-0004",
+      "startDate": "2025-11-30T16:00:00.000Z",
+      "customerName": "深圳市海能达新材料有限公司",
+      "customerCode": "QXCS00008",
+      "customerOrderNo": "",
+      "shippingAddress": "刘汉华  13510491839 华南 广东 中山市南区上塘大街26号",
+      "products": [
+        {
+          "productName": "Y89 LL专用",
+          "productCode": "PASTEOT-808907-JAR",
+          "productModel": "SN96.5AG3.0CU0.5/T4/Y89/88.35%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QSC-2025012-0001",
+      "startDate": "2025-10-28T16:00:00.000Z",
+      "customerName": "杭州成丰电子科技有限公司",
+      "customerCode": "QXCS00007",
+      "customerOrderNo": "",
+      "shippingAddress": "",
+      "products": [
+        {
+          "productName": "锡膏",
+          "productCode": "PASTEOT-808904-JAR（TP)",
+          "productModel": "SASN99AG0.3CU0.7/T4/Y89/88.35%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    },
+    {
+      "contractNo": "QSC-2025012-0002",
+      "startDate": "2025-10-19T16:00:00.000Z",
+      "customerName": "杭州润村科技有限公司",
+      "customerCode": "QXCS00006",
+      "customerOrderNo": "",
+      "shippingAddress": "",
+      "products": [
+        {
+          "productName": "锡膏",
+          "productCode": "PASTEOT-809201-jar(TP)",
+          "productModel": "SN63PB37/T4/Y92/90%",
+          "quantity": 0.5,
+          "unitPrice": 0,
+          "amount": 0,
+          "unit": "公斤"
+        }
+      ]
+    }
+  ]
+}

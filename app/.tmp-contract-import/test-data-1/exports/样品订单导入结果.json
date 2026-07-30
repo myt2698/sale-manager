@@ -1,0 +1,26 @@
+{
+  "success": true,
+  "completedAt": "2026-07-29T06:46:29.542Z",
+  "sourceFile": "C:/Users/02/Downloads/所有合同列表_20260729141532_张夏.xls",
+  "backupPath": "D:\\projects\\sale-manager\\app\\.tmp-contract-import\\test-data-1\\backups\\合同导入前备份-2026-07-29-06-46-29.zip",
+  "sourceContractCount": 38,
+  "sourceProductLineCount": 46,
+  "importedOrderCount": 38,
+  "skippedOrderCount": 0,
+  "importedProductLineCount": 46,
+  "newCustomerCount": 16,
+  "reusedCustomerCount": 22,
+  "newProductCount": 13,
+  "reusedProductCount": 33,
+  "createdCategory": false,
+  "finalCustomerCount": 30,
+  "finalProductCount": 23,
+  "finalSampleOrderCount": 38,
+  "validation": {
+    "allSourceContractsPresent": true,
+    "allOrdersReviewed": true,
+    "allShippingInfoChecked": true,
+    "allSpecialRequirementsChecked": true,
+    "allCashTerms": true
+  }
+}

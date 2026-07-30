@@ -36,6 +36,8 @@ db/migrations/*.sql
 # Build outputs
 dist/
 build/
+release/
+release-*/
 # Test coverage
 coverage/
 .nyc_output/

@@ -8,11 +8,13 @@ import QuotationRecords from "./pages/QuotationRecords";
 import MetalPrices from "./pages/MetalPrices";
 
 import SalesOrders from "./pages/SalesOrders";
+import SampleOrders from "./pages/SampleOrders";
 import Finance from "./pages/Finance";
 import Reports from "./pages/Reports";
 import Products from "./pages/Products";
 import FilenameGenerator from "./pages/FilenameGenerator";
 import Login from "./pages/Login";
+import DataManagement from "./pages/DataManagement";
 
 export default function App() {
   return (
@@ -69,6 +71,14 @@ export default function App() {
         }
       />
       <Route
+        path="/sample-orders"
+        element={
+          <Layout>
+            <SampleOrders />
+          </Layout>
+        }
+      />
+      <Route
         path="/finance"
         element={
           <Layout>
@@ -80,7 +90,15 @@ export default function App() {
         path="/reports"
         element={
           <Layout>
-            <Reports />
+            <Reports key="sales-reports" />
+          </Layout>
+        }
+      />
+      <Route
+        path="/sample-reports"
+        element={
+          <Layout>
+            <Reports key="sample-reports" mode="sample" />
           </Layout>
         }
       />
@@ -97,6 +115,14 @@ export default function App() {
         element={
           <Layout>
             <FilenameGenerator />
+          </Layout>
+        }
+      />
+      <Route
+        path="/data-management"
+        element={
+          <Layout>
+            <DataManagement />
           </Layout>
         }
       />

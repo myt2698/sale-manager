@@ -84,8 +84,12 @@ function calcSubTotal(qty: string, price: string): string {
   return (q * p).toFixed(2);
 }
 
-export default function SalesOrders() {
+export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "sample" }) {
   const trpc = useMockTrpc();
+  const isSample = mode === "sample";
+  const orderKind = isSample ? "样品订单" : "销售订单";
+  const orderApi: any = isSample ? trpc.sampleOrder : trpc.salesOrder;
+  const reminderApi: any = isSample ? trpc.sampleReminder : trpc.reminder;
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
@@ -103,16 +107,16 @@ export default function SalesOrders() {
   const [returnShipmentId, setReturnShipmentId] = useState<number | null>(null);
   const [returnForm, setReturnForm] = useState({ quantity: "", reason: "" });
 
-  const { data, refetch } = trpc.salesOrder.list.useQuery({
+  const { data, refetch } = orderApi.list.useQuery({
     search: search || undefined, status: statusFilter === "all" ? undefined : statusFilter,
     startDate: startDate || undefined, endDate: endDate || undefined, page, pageSize,
   });
   // 获取全部数据用于导出
-  const { data: allData } = trpc.salesOrder.list.useQuery({
+  const { data: allData } = orderApi.list.useQuery({
     search: search || undefined, status: statusFilter === "all" ? undefined : statusFilter,
     startDate: startDate || undefined, endDate: endDate || undefined, page: 1, pageSize: 9999,
   });
-  const { data: detailData } = trpc.salesOrder.getById.useQuery(
+  const { data: detailData } = orderApi.getById.useQuery(
     { id: selectedOrder! }, { enabled: !!selectedOrder }
   );
   const { data: productsData } = trpc.product.list.useQuery({});
@@ -124,41 +128,41 @@ export default function SalesOrders() {
   };
   const { data: customersData } = trpc.customer.list.useQuery({ pageSize: 100 });
 
-  const createMutation = trpc.salesOrder.create.useMutation({ onSuccess: () => { toast.success("订单创建成功"); closeForm(); refetch(); } });
-  const updateMutation = trpc.salesOrder.update.useMutation({ onSuccess: () => { toast.success("订单更新成功"); closeForm(); refetch(); } });
-  const deleteMutation = trpc.salesOrder.delete.useMutation({ onSuccess: () => { toast.success("订单删除成功"); refetch(); } });
-  const recordShipmentMutation = trpc.salesOrder.recordShipment.useMutation({
+  const createMutation = orderApi.create.useMutation({ onSuccess: () => { toast.success(`${orderKind}创建成功`); closeForm(); refetch(); } });
+  const updateMutation = orderApi.update.useMutation({ onSuccess: () => { toast.success(`${orderKind}更新成功`); closeForm(); refetch(); } });
+  const deleteMutation = orderApi.delete.useMutation({ onSuccess: () => { toast.success(`${orderKind}删除成功`); refetch(); } });
+  const recordShipmentMutation = orderApi.recordShipment.useMutation({
     onSuccess: () => { toast.success("发货记录已保存"); setOpenShippingForm(false); setShippingForm({ shippedQty: "", productName: "" }); refetch(); },
     onError: (err: any) => toast.error(err.message),
   });
-  const updateShipmentStatusMutation = trpc.salesOrder.updateShipmentStatus.useMutation({
+  const updateShipmentStatusMutation = orderApi.updateShipmentStatus.useMutation({
     onSuccess: () => { toast.success("状态已更新"); refetch(); }, onError: (err: any) => toast.error(err.message),
   });
-  const recordReturnMutation = trpc.salesOrder.recordReturn.useMutation({
+  const recordReturnMutation = orderApi.recordReturn.useMutation({
     onSuccess: () => { toast.success("退货申请已提交"); setOpenReturnForm(false); setReturnForm({ quantity: "", reason: "" }); setReturnShipmentId(null); refetch(); },
     onError: (err: any) => toast.error(err.message),
   });
-  const updateAfterSalesMutation = trpc.salesOrder.updateAfterSales.useMutation({
+  const updateAfterSalesMutation = orderApi.updateAfterSales.useMutation({
     onSuccess: () => { toast.success("售后状态已更新"); refetch(); },
     onError: (err: any) => toast.error(err.message),
   });
-  const updatePaymentDueDateMutation = trpc.salesOrder.updatePaymentDueDate.useMutation({
+  const updatePaymentDueDateMutation = orderApi.updatePaymentDueDate.useMutation({
     onSuccess: () => { toast.success("付款到期日已更新"); refetch(); },
     onError: (err: any) => toast.error(err.message),
   });
   // 提醒
-  const { data: remindersData, refetch: refetchReminders } = trpc.reminder.list.useQuery(
+  const { data: remindersData, refetch: refetchReminders } = reminderApi.list.useQuery(
     { orderId: selectedOrder ?? 0 }, { enabled: !!selectedOrder }
   );
-  const createReminderMutation = trpc.reminder.create.useMutation({
+  const createReminderMutation = reminderApi.create.useMutation({
     onSuccess: () => { toast.success("提醒已创建"); refetchReminders(); },
     onError: (err: any) => toast.error(err.message),
   });
-  const updateReminderMutation = trpc.reminder.update.useMutation({
+  const updateReminderMutation = reminderApi.update.useMutation({
     onSuccess: () => { toast.success("提醒已更新"); refetchReminders(); },
     onError: (err: any) => toast.error(err.message),
   });
-  const deleteReminderMutation = trpc.reminder.delete.useMutation({
+  const deleteReminderMutation = reminderApi.delete.useMutation({
     onSuccess: () => { toast.success("提醒已删除"); refetchReminders(); },
     onError: (err: any) => toast.error(err.message),
   });
@@ -280,7 +284,7 @@ export default function SalesOrders() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "订单列表");
     const now = new Date().toISOString().split("T")[0];
-    XLSX.writeFile(wb, `销售订单_${now}.xlsx`);
+    XLSX.writeFile(wb, `${orderKind}_${now}.xlsx`);
     setShowExportDialog(false);
     toast.success(`已导出 ${items.length} 条订单`);
   };
@@ -333,7 +337,15 @@ export default function SalesOrders() {
         <div className="flex flex-wrap gap-3 items-center">
           <div className="relative flex-1 min-w-[160px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <Input placeholder="搜索订单号或客户..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
+            <Input
+              placeholder="模糊搜索订单号或客户名称..."
+              value={search}
+              onChange={e => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              className="pl-10"
+            />
           </div>
           <div className="flex items-center gap-1">
             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-9 border rounded-md px-2 text-sm" />
@@ -400,7 +412,7 @@ export default function SalesOrders() {
                 </TableCell>
               </TableRow>
             ))}
-            {(!data || data.items.length === 0) && <TableRow><TableCell colSpan={6} className="text-center py-16 text-gray-300"><Package size={40} className="mx-auto mb-2" /><p className="text-sm">暂无销售订单</p></TableCell></TableRow>}
+            {(!data || data.items.length === 0) && <TableRow><TableCell colSpan={6} className="text-center py-16 text-gray-300"><Package size={40} className="mx-auto mb-2" /><p className="text-sm">暂无{orderKind}</p></TableCell></TableRow>}
           </TableBody>
         </Table>
       </CardContent></Card>
@@ -431,7 +443,7 @@ export default function SalesOrders() {
           <div className="bg-white rounded-lg shadow-lg w-full max-w-3xl max-h-[92vh] overflow-y-auto m-4">
             <div className="p-6 space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold flex items-center gap-2"><Package size={20} />{isEditing ? "编辑销售订单" : "新建销售订单"}</h3>
+                <h3 className="text-lg font-semibold flex items-center gap-2"><Package size={20} />{isEditing ? `编辑${orderKind}` : `新建${orderKind}`}</h3>
                 <Button variant="ghost" size="sm" onClick={closeForm}><X size={18} /></Button>
               </div>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -450,7 +462,7 @@ export default function SalesOrders() {
                 <div className="bg-gray-50 rounded-lg p-4 space-y-3">
                   <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5"><Package size={15} className="text-blue-500" />基本信息</h4>
                   <div className="grid grid-cols-3 gap-3">
-                    <div><Label className="text-xs text-gray-500">订单编号 *</Label><Input className="mt-1" value={formData.orderNo} onChange={e => setFormData({ ...formData, orderNo: e.target.value })} placeholder="SO-2026-001" /></div>
+                    <div><Label className="text-xs text-gray-500">订单编号 *</Label><Input className="mt-1" value={formData.orderNo} onChange={e => setFormData({ ...formData, orderNo: e.target.value })} placeholder={isSample ? "SP-2026-001" : "SO-2026-001"} /></div>
                     <div><Label className="text-xs text-gray-500">客户订单号</Label><Input className="mt-1" value={formData.customerOrderNo} onChange={e => setFormData({ ...formData, customerOrderNo: e.target.value })} /></div>
                     <div><Label className="text-xs text-gray-500">订单日期 *</Label><Input className="mt-1" type="date" value={formData.orderDate} onChange={e => setFormData({ ...formData, orderDate: e.target.value })} /></div>
                   </div>
@@ -762,7 +774,7 @@ export default function SalesOrders() {
                     <span className="text-xs font-semibold text-amber-700">提醒事项</span>
                     <Badge className="bg-amber-100 text-amber-700 text-[10px]">{(remindersData?.items ?? []).length}条</Badge>
                   </div>
-                  <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => { setReminderForm({ content: "", remindDate: new Date().toISOString().split("T")[0], priority: "high" }); setShowReminderForm(true); }}>
+                  <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => { setReminderForm({ content: "", remindDate: new Date().toISOString().split("T")[0], priority: "high", type: "对账提醒" }); setShowReminderForm(true); }}>
                     <Plus size={12} className="mr-1" />添加
                   </Button>
                 </div>
@@ -924,7 +936,7 @@ export default function SalesOrders() {
                 return records.map((r, i) => (
                   <div key={i} className="flex items-start gap-3">
                     <div className="flex flex-col items-center">
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${r.status?.includes("已") ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-400"}`}>
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs bg-green-100 text-green-600">
                         {i + 1}
                       </div>
                       {i < records.length - 1 && <div className="w-0.5 h-6 bg-gray-200" />}

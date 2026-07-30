@@ -1,11 +1,15 @@
 {
-  "name": "my-app",
+  "name": "sale-manager-desktop",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "packageManager": "pnpm@11.9.0",
+  "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "desktop:dev": "concurrently -k \"vite\" \"wait-on http://127.0.0.1:3000 && electron .\"",
     "build": "vite build && esbuild api/boot.ts --platform=node --bundle --format=esm --outdir=dist --banner:js=\"import { createRequire } from 'module';const require = createRequire(import.meta.url);\"",
+    "desktop:build": "vite build && electron-builder --win portable",
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "NODE_ENV=production node dist/boot.js",
@@ -17,6 +21,7 @@
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
+    "adm-zip": "^0.5.16",
     "@aws-sdk/client-s3": "^3.965.0",
     "@aws-sdk/s3-request-presigner": "^3.965.0",
     "@hono/node-server": "^1.14.3",
@@ -89,7 +94,10 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
     "autoprefixer": "^10.4.23",
+    "concurrently": "^9.2.1",
     "drizzle-kit": "^0.31.8",
+    "electron": "^37.2.6",
+    "electron-builder": "^26.0.12",
     "esbuild": "^0.27.2",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
@@ -104,6 +112,25 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",
-    "vitest": "^4.0.16"
+    "vitest": "^4.0.16",
+    "wait-on": "^8.0.4"
+  },
+  "build": {
+    "appId": "com.sale-manager.desktop",
+    "productName": "销售管理系统",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/public/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": "portable",
+      "icon": "public/icon-rounded.png",
+      "artifactName": "销售管理系统.${ext}"
+    }
   }
 }

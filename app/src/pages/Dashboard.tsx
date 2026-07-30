@@ -34,24 +34,36 @@ export default function Dashboard() {
   const { data: aging } = trpc.dashboard.arAging.useQuery();
   const { data: overdueOrders } = trpc.dashboard.overdueOrders.useQuery();
 
-  // 顶部4个核心指标
+  // 顶部核心指标：销售订单与样品订单分别统计
   const kpiCards = [
     {
-      label: "订单总数",
+      label: "销售订单",
       value: stats?.orders.total ?? 0,
       unit: "笔",
       icon: ShoppingCart,
       iconBg: "bg-blue-100",
       iconColor: "text-blue-600",
+      accent: "border-l-blue-500",
       trend: `应收 ¥${(Number(stats?.orders.totalAmount ?? 0) / 10000).toFixed(1)}万`,
     },
     {
-      label: "进行中",
+      label: "样品订单",
+      value: stats?.sampleOrders?.total ?? 0,
+      unit: "笔",
+      icon: FileText,
+      iconBg: "bg-violet-100",
+      iconColor: "text-violet-600",
+      accent: "border-l-violet-500",
+      trend: `进行中 ${stats?.sampleOrders?.inProgress ?? 0} · 已完成 ${stats?.sampleOrders?.completed ?? 0}`,
+    },
+    {
+      label: "销售进行中",
       value: stats?.orders.inProgress ?? 0,
       unit: "笔",
       icon: Package,
       iconBg: "bg-amber-100",
       iconColor: "text-amber-600",
+      accent: "border-l-amber-500",
       trend: `待签收 ${stats?.orders.pendingReceipt ?? 0} · 待对账 ${stats?.orders.pendingReconciliation ?? 0}`,
     },
     {
@@ -61,6 +73,7 @@ export default function Dashboard() {
       icon: Users,
       iconBg: "bg-green-100",
       iconColor: "text-green-600",
+      accent: "border-l-green-500",
       trend: `活跃 ${stats?.customers.active ?? 0} · 潜在 ${stats?.customers.potential ?? 0}`,
     },
     {
@@ -70,6 +83,7 @@ export default function Dashboard() {
       icon: DollarSign,
       iconBg: "bg-emerald-100",
       iconColor: "text-emerald-600",
+      accent: "border-l-emerald-500",
       trend: `${stats?.payments.monthCount ?? 0} 笔回款`,
     },
   ];
@@ -94,22 +108,20 @@ export default function Dashboard() {
   return (
     <div className="space-y-5">
       {/* ===== 核心指标卡片 ===== */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {kpiCards.map((kpi) => {
           const Icon = kpi.icon;
           return (
-            <Card key={kpi.label} className="overflow-hidden">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <p className="text-xs text-gray-400">{kpi.label}</p>
-                    <p className="text-xl font-bold text-gray-900">{kpi.value}<span className="text-xs font-normal text-gray-400 ml-0.5">{kpi.unit}</span></p>
-                    <p className="text-xs text-gray-500">{kpi.trend}</p>
-                  </div>
-                  <div className={`w-9 h-9 ${kpi.iconBg} rounded-lg flex items-center justify-center shrink-0`}>
-                    <Icon size={18} className={kpi.iconColor} />
+            <Card key={kpi.label} className={`min-w-0 overflow-hidden border-l-4 ${kpi.accent} shadow-sm`}>
+              <CardContent className="p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-gray-500 truncate">{kpi.label}</p>
+                  <div className={`w-7 h-7 ${kpi.iconBg} rounded-md flex items-center justify-center shrink-0`}>
+                    <Icon size={14} className={kpi.iconColor} />
                   </div>
                 </div>
+                <p className="mt-1 text-lg font-bold text-gray-900 whitespace-nowrap">{kpi.value}<span className="text-[11px] font-normal text-gray-400 ml-0.5">{kpi.unit}</span></p>
+                <p className="mt-0.5 text-[11px] text-gray-400 truncate" title={kpi.trend}>{kpi.trend}</p>
               </CardContent>
             </Card>
           );
