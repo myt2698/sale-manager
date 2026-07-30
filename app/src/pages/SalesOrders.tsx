@@ -336,15 +336,20 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
       <Card><CardContent className="p-4">
         <div className="flex flex-wrap gap-3 items-center">
           <div className="relative flex-1 min-w-[160px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-400"
+              size={18}
+              aria-hidden="true"
+            />
             <Input
+              type="search"
               placeholder="模糊搜索订单号或客户名称..."
               value={search}
               onChange={e => {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              className="pl-10"
+              className="relative z-0 pl-10"
             />
           </div>
           <div className="flex items-center gap-1">

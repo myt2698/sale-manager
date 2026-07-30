@@ -1355,9 +1355,24 @@ export function useMockTrpc() {
         if (data.amount !== undefined && data.dimension === "paymentStatus") {
           shipment.receivedAmount = String(Number(data.amount).toFixed(2));
         }
+        // 每次推进任一流程维度后，都同步订单主状态。
+        // 之前只有付款和售后会写回主状态，导致开票完成后订单仍停留在“待开票”。
+        const order = salesOrders.find((o) => o.id === data.orderId);
+        if (order) {
+          const previousStatus = (order as any).orderStatus;
+          const nextStatus = calcOrderStatus(order);
+          (order as any).orderStatus = nextStatus;
+          (order as any).status = nextStatus;
+          if (previousStatus !== nextStatus) {
+            if (!(order as any).statusHistory) (order as any).statusHistory = [];
+            (order as any).statusHistory.push({
+              status: nextStatus,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
         // 支付维度更新时自动管理订单主状态
         if (data.dimension === "paymentStatus") {
-          const order = salesOrders.find((o) => o.id === data.orderId);
           if (order) {
             const shippedTotal = orderShipments.reduce((sum: number, s: any) => sum + Number(s.quantity), 0);
             const fullyShipped = shippedTotal >= Number(order.quantity);
