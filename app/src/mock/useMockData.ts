@@ -141,8 +141,8 @@ salesOrders.forEach((o: any) => {
   o.totalAmount = o.items.reduce((sum: number, it: any) => sum + Number(it.subTotal ?? it.quantity * it.unitPrice), 0).toFixed(2);
 });
 
-// Backward compat: migrate the original lightweight sample-order records to the
-// same shape used by sales orders. Existing imported sample data is preserved.
+// Sample orders only track products, quantities and fulfillment. Remove legacy
+// pricing, payment, invoice, reconciliation and credit-term fields.
 sampleOrders.forEach((o: any) => {
   if (!o.items || !Array.isArray(o.items) || o.items.length === 0) {
     o.items = [{
@@ -151,25 +151,42 @@ sampleOrders.forEach((o: any) => {
       productCode: o.productCode ?? "",
       productModel: o.productModel ?? "",
       quantity: Number(o.quantity ?? 0),
-      unitPrice: Number(o.unitPrice ?? 0),
-      subTotal: Number(o.totalAmount ?? (Number(o.quantity ?? 0) * Number(o.unitPrice ?? 0))),
     }];
   }
+  o.items = o.items.map((item: any) => {
+    const sampleItem = { ...item };
+    delete sampleItem.unitPrice;
+    delete sampleItem.subTotal;
+    return sampleItem;
+  });
   const customer = customers.find((c: any) => c.id === o.customerId);
   o.customerName = o.customerName || customer?.companyName || "";
   o.orderDate = o.orderDate || o.createdAt || new Date().toISOString();
   o.orderStatus = o.orderStatus || o.status || "待排产";
   o.status = o.orderStatus;
   o.quantity = o.items.reduce((sum: number, it: any) => sum + Number(it.quantity ?? 0), 0);
-  o.totalAmount = o.items.reduce((sum: number, it: any) => sum + Number(it.subTotal ?? Number(it.quantity ?? 0) * Number(it.unitPrice ?? 0)), 0).toFixed(2);
-  o.receivedAmount = String(Number(o.receivedAmount ?? 0).toFixed(2));
-  o.invoicedAmount = String(Number(o.invoicedAmount ?? 0).toFixed(2));
-  o.balance = Number(o.balance ?? o.totalAmount);
-  o.paymentTerms = String(o.paymentTerms ?? "0");
+  delete o.unitPrice;
+  delete o.totalAmount;
+  delete o.receivedAmount;
+  delete o.invoicedAmount;
+  delete o.balance;
+  delete o.paymentTerms;
   o.contractReviewed = o.contractReviewed ?? true;
   o.statusHistory = Array.isArray(o.statusHistory) && o.statusHistory.length > 0
     ? o.statusHistory.map((h: any) => ({ ...h, status: h.status === "待处理" ? "待排产" : h.status }))
     : [{ status: o.orderStatus, timestamp: o.createdAt || new Date().toISOString() }];
+});
+Object.values(sampleShipments).flat().forEach((shipment: any) => {
+  delete shipment.paymentStatus;
+  delete shipment.paymentDate;
+  delete shipment.paymentDueDate;
+  delete shipment.receivedAmount;
+  delete shipment.refundedAmount;
+  delete shipment.invoiceStatus;
+  delete shipment.invoiceDate;
+  delete shipment.reconciliationStatus;
+  delete shipment.reconciliationDate;
+  delete shipment.flowType;
 });
 if (isInit) saveToLS(LS_KEYS.sampleOrders, sampleOrders);
 // Fix: 补全所有 customerName 为空的订单（兼容历史数据）
@@ -434,6 +451,26 @@ export function useMockTrpc() {
     return result;
   }
 
+  function calcSampleOrderStatus(order: any): string {
+    if (order.manualCompleted === true) return "已完成";
+    const orderShipments = (sampleShipments[order.id] ?? []).map((shipment: any) => ({
+      ...shipment,
+      shippingStatus: shipment.shippingStatus ?? "待发货",
+      receivingStatus: shipment.receivingStatus ?? "待签收",
+      afterSalesStatus: shipment.afterSalesStatus ?? "无售后",
+    }));
+    if (orderShipments.some((shipment: any) => shipment.afterSalesStatus === "售后申请中" || shipment.afterSalesStatus === "退货中")) return "退货中";
+    if (orderShipments.length === 0) return "待排产";
+    const arrangedTotal = orderShipments.reduce((sum: number, shipment: any) => sum + Number(shipment.quantity ?? 0), 0);
+    const fullyArranged = arrangedTotal >= Number(order.quantity ?? 0);
+    const allShipped = fullyArranged && orderShipments.every((shipment: any) => shipment.shippingStatus === "已发货");
+    const allReceived = allShipped && orderShipments.every((shipment: any) => shipment.receivingStatus === "已签收");
+    if (allReceived) return "已完成";
+    if (allShipped) return "待签收";
+    if (orderShipments.some((shipment: any) => shipment.shippingStatus === "已发货")) return "部分待签收";
+    return "生产中";
+  }
+
   const dashboardStats = {
     useQuery: (_input?: any, opts?: any) =>
       useMockQuery(() => {
@@ -479,7 +516,7 @@ export function useMockTrpc() {
         // 本月回款统计
         const monthPayments = payments.filter((p: any) => new Date(p.paymentDate) >= monthStart);
         const monthTotal = monthPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
-        const sampleStatuses = sampleOrders.map((o: any) => calcOrderStatus(o, sampleShipments));
+        const sampleStatuses = sampleOrders.map((o: any) => calcSampleOrderStatus(o));
 
         return {
           orders: {
@@ -719,31 +756,17 @@ export function useMockTrpc() {
       (sum: number, s: any) => sum + Number(s.returnQuantity ?? 0),
       0,
     );
-    const receivedAmount = orderShipments.reduce((sum: number, s: any) => sum + Number(s.receivedAmount ?? 0), 0);
-    const refundedAmount = orderShipments.reduce((sum: number, s: any) => sum + Number(s.refundedAmount ?? 0), 0);
-    const itemsTotal = (o.items ?? []).reduce((sum: number, it: any) => sum + Number(it.subTotal ?? Number(it.quantity ?? 0) * Number(it.unitPrice ?? 0)), 0);
-    const totalAmount = itemsTotal > 0 ? itemsTotal : Number(o.totalAmount ?? 0);
-    const now = Date.now();
-    const isOverdue = orderShipments.some((s: any) =>
-      (s.paymentStatus === "待支付" || s.paymentStatus === "部分付款") &&
-      !!s.paymentDueDate &&
-      new Date(s.paymentDueDate).getTime() < now
-    );
     return {
       ...o,
       customerName: resolveOrderCustomerName(o) || "未知客户",
-      orderStatus: calcOrderStatus(o, sampleShipments),
-      status: calcOrderStatus(o, sampleShipments),
-      totalAmount: totalAmount.toFixed(2),
-      receivedAmount: receivedAmount.toFixed(2),
-      refundedAmount: refundedAmount.toFixed(2),
-      balance: Math.max(0, totalAmount - refundedAmount - receivedAmount),
+      orderStatus: calcSampleOrderStatus(o),
+      status: calcSampleOrderStatus(o),
       shippedTotal: shippedTotal.toFixed(2),
       actualShippedQty: actualShippedQty.toFixed(2),
       returnedQty: returnedQty.toFixed(2),
       remainingQty: Math.max(0, Number(o.quantity ?? 0) - shippedTotal).toFixed(2),
       overdueReminderCount: sampleReminders.filter((r: any) => r.orderId === o.id && !r.isHandled && r.remindDate < new Date().toISOString()).length,
-      isOverdue,
+      isOverdue: false,
     };
   };
 
@@ -794,13 +817,7 @@ export function useMockTrpc() {
           ...s,
           shippingStatus: s.shippingStatus ?? "待发货",
           receivingStatus: s.receivingStatus ?? "待签收",
-          paymentStatus: s.paymentStatus ?? "待支付",
           afterSalesStatus: s.afterSalesStatus ?? "无售后",
-          invoiceStatus: s.invoiceStatus ?? "待开票",
-          reconciliationStatus: s.reconciliationStatus ?? "未对账",
-          receivedAmount: s.receivedAmount ?? "0.00",
-          refundedAmount: s.refundedAmount ?? "0.00",
-          paymentDueDate: s.paymentDueDate ?? null,
         }));
         const receivedTotal = orderShipments
           .filter((s: any) => s.receivingStatus === "已签收")
@@ -821,28 +838,30 @@ export function useMockTrpc() {
       useMockMutation((data: any) => {
         const id = nextId.sampleOrder++;
         const customer = customers.find((c: any) => c.id === data.customerId);
-        const items = data.items ?? [];
+        const items = (data.items ?? []).map((item: any) => ({
+          productId: item.productId ?? null,
+          productName: item.productName ?? "",
+          productCode: item.productCode ?? "",
+          productModel: item.productModel ?? "",
+          quantity: item.quantity,
+        }));
         const firstItem = items[0] ?? {};
         const quantity = items.reduce((sum: number, it: any) => sum + Number(it.quantity ?? 0), 0);
-        const totalAmount = items.reduce((sum: number, it: any) => sum + Number(it.subTotal ?? Number(it.quantity ?? 0) * Number(it.unitPrice ?? 0)), 0);
         const now = new Date().toISOString();
+        const sampleData = { ...data };
+        delete sampleData.paymentTerms;
         sampleOrders.unshift({
-          ...data,
+          ...sampleData,
           id,
           items,
           quantity,
-          totalAmount: totalAmount.toFixed(2),
           productId: firstItem.productId ?? null,
           productName: firstItem.productName ?? "",
           productCode: firstItem.productCode ?? "",
           productModel: firstItem.productModel ?? "",
-          unitPrice: firstItem.unitPrice ?? 0,
           customerName: customer?.companyName ?? data.customerName ?? "",
           orderStatus: "待排产",
           status: "待排产",
-          receivedAmount: "0.00",
-          invoicedAmount: "0.00",
-          balance: totalAmount,
           isOverdue: false,
           overdueDays: 0,
           statusHistory: [{ status: "待排产", timestamp: now }],
@@ -860,15 +879,26 @@ export function useMockTrpc() {
         if (idx >= 0) {
           const current = sampleOrders[idx] as any;
           const update = { ...data.data };
+          delete update.paymentTerms;
+          delete update.unitPrice;
+          delete update.totalAmount;
+          delete update.receivedAmount;
+          delete update.invoicedAmount;
+          delete update.balance;
           if (Array.isArray(update.items)) {
+            update.items = update.items.map((item: any) => ({
+              productId: item.productId ?? null,
+              productName: item.productName ?? "",
+              productCode: item.productCode ?? "",
+              productModel: item.productModel ?? "",
+              quantity: item.quantity,
+            }));
             const firstItem = update.items[0] ?? {};
             update.quantity = update.items.reduce((sum: number, it: any) => sum + Number(it.quantity ?? 0), 0);
-            update.totalAmount = update.items.reduce((sum: number, it: any) => sum + Number(it.subTotal ?? Number(it.quantity ?? 0) * Number(it.unitPrice ?? 0)), 0).toFixed(2);
             update.productId = firstItem.productId ?? null;
             update.productName = firstItem.productName ?? "";
             update.productCode = firstItem.productCode ?? "";
             update.productModel = firstItem.productModel ?? "";
-            update.unitPrice = firstItem.unitPrice ?? 0;
           }
           if (update.customerId !== undefined) {
             update.customerName = customers.find((c: any) => c.id === update.customerId)?.companyName ?? current.customerName;
@@ -909,7 +939,7 @@ export function useMockTrpc() {
 
   const sampleOrderRecordShipment = {
     useMutation: (opts?: any) =>
-      useMockMutation((data: { orderId: number; quantity: string; productName?: string; logisticsCompany: string; logisticsNo: string }) => {
+      useMockMutation((data: { orderId: number; quantity: string; productName?: string; logisticsCompany: string; logisticsNo: string; productionTime?: string }) => {
         const order = sampleOrders.find((o: any) => o.id === data.orderId);
         if (!order) throw new Error("样品订单不存在");
         const orderShipments = sampleShipments[data.orderId] ?? [];
@@ -918,8 +948,7 @@ export function useMockTrpc() {
         if (!Number.isFinite(qty) || qty <= 0) throw new Error("发货数量必须大于 0");
         if (shippedTotal + qty > Number(order.quantity)) throw new Error("发货数量超过样品订单剩余数量");
         order.manualCompleted = false;
-        const isCash = order.paymentTerms === "0" || order.paymentTerms === 0;
-        const now = new Date().toISOString();
+        const now = data.productionTime ?? new Date().toISOString();
         const shipment = {
           id: nextId.sampleShipment++,
           orderId: data.orderId,
@@ -931,14 +960,7 @@ export function useMockTrpc() {
           productionDate: now,
           shippingStatus: "待发货",
           receivingStatus: "待签收",
-          paymentStatus: "待支付",
           afterSalesStatus: "无售后",
-          invoiceStatus: "待开票",
-          reconciliationStatus: isCash ? "已对账" : "未对账",
-          flowType: isCash ? "cash" : "credit",
-          receivedAmount: "0.00",
-          refundedAmount: "0.00",
-          paymentDueDate: null,
         };
         sampleShipments[data.orderId] = [...orderShipments, shipment];
         order.logisticsCompany = data.logisticsCompany;
@@ -949,11 +971,11 @@ export function useMockTrpc() {
 
   const sampleOrderUpdateShipmentStatus = {
     useMutation: (opts?: any) =>
-      useMockMutation((data: { orderId: number; shipmentId: number; dimension: string; value: string; amount?: string }) => {
+      useMockMutation((data: { orderId: number; shipmentId: number; dimension: string; value: string; amount?: string; occurredAt?: string }) => {
         const shipment = (sampleShipments[data.orderId] ?? []).find((s: any) => Number(s.id) === Number(data.shipmentId));
         if (!shipment) throw new Error("样品发货记录不存在");
         shipment[data.dimension] = data.value;
-        shipment[data.dimension.replace("Status", "Date")] = new Date().toISOString();
+        shipment[data.dimension.replace("Status", "Date")] = data.occurredAt ?? new Date().toISOString();
         if (data.amount !== undefined && data.dimension === "paymentStatus") {
           shipment.receivedAmount = Number(data.amount).toFixed(2);
         }
@@ -989,11 +1011,8 @@ export function useMockTrpc() {
         const shipment = orderShipments.find((s: any) => Number(s.id) === Number(data.shipmentId));
         if (!shipment) throw new Error("样品发货记录不存在");
         shipment.afterSalesStatus = data.afterSalesStatus;
-        if (data.afterSalesStatus === "售后完成" && order && shipment.returnQuantity) {
-          shipment.refundedAmount = (Number(shipment.returnQuantity) * Number(order.unitPrice ?? 0)).toFixed(2);
-        }
         if (order && orderShipments.every((s: any) => ["无售后", "售后完成", "售后关闭"].includes(s.afterSalesStatus))) {
-          order.orderStatus = calcOrderStatus(order, sampleShipments);
+          order.orderStatus = calcSampleOrderStatus(order);
           order.status = order.orderStatus;
         }
       }, opts),
@@ -1005,6 +1024,15 @@ export function useMockTrpc() {
         const shipment = (sampleShipments[data.orderId] ?? []).find((s: any) => Number(s.id) === Number(data.shipmentId));
         if (!shipment) throw new Error("样品发货记录不存在");
         shipment.paymentDueDate = data.paymentDueDate;
+      }, opts),
+  };
+
+  const sampleOrderUpdateShipmentNote = {
+    useMutation: (opts?: any) =>
+      useMockMutation((data: { orderId: number; shipmentId: number; note: string }) => {
+        const shipment = (sampleShipments[data.orderId] ?? []).find((item: any) => Number(item.id) === Number(data.shipmentId));
+        if (!shipment) throw new Error("样品发货记录不存在");
+        shipment.batchNote = data.note;
       }, opts),
   };
 
@@ -1292,14 +1320,14 @@ export function useMockTrpc() {
 
   const salesOrderRecordShipment = {
     useMutation: (opts?: any) =>
-      useMockMutation((data: { orderId: number; quantity: string; productName?: string; logisticsCompany: string; logisticsNo: string }) => {
+      useMockMutation((data: { orderId: number; quantity: string; productName?: string; logisticsCompany: string; logisticsNo: string; productionTime?: string }) => {
         const order = salesOrders.find((o) => o.id === data.orderId);
         if (!order) throw new Error("订单不存在");
         const orderShipments = shipments[data.orderId] ?? [];
         const shippedTotal = orderShipments.reduce((sum: number, s: any) => sum + Number(s.quantity), 0);
         const qty = Number(data.quantity);
         if (shippedTotal + qty > Number(order.quantity)) {
-          throw new Error("发货数量超过订单剩余数量");
+          throw new Error("安排生产数量超过订单剩余数量");
         }
         // 判断订单付款条件：现款(先款后货) vs 账期(先货后款)
         const isCashOrder = order.paymentTerms === "0" || order.paymentTerms === 0;
@@ -1313,8 +1341,8 @@ export function useMockTrpc() {
           productName: data.productName ?? "",
           logisticsCompany: data.logisticsCompany,
           logisticsNo: data.logisticsNo,
-          shippedDate: new Date().toISOString(),
-          productionDate: new Date().toISOString(), // 记录安排生产时间
+          shippedDate: data.productionTime ?? new Date().toISOString(),
+          productionDate: data.productionTime ?? new Date().toISOString(), // 记录安排生产时间
           // 五维状态体系 - 安排生产数量时统一设为"待发货"（生产中状态）
           // 后续可手动推进到"已发货"
           shippingStatus: "待发货",
@@ -1342,7 +1370,7 @@ export function useMockTrpc() {
   // 更新发货批次五维状态（每维独立推进）
   const salesOrderUpdateShipmentStatus = {
     useMutation: (opts?: any) =>
-      useMockMutation((data: { orderId: number; shipmentId: number; dimension: string; value: string; amount?: string }) => {
+      useMockMutation((data: { orderId: number; shipmentId: number; dimension: string; value: string; amount?: string; occurredAt?: string }) => {
         const orderShipments = shipments[data.orderId] ?? [];
         const shipment = orderShipments.find((s: any) => Number(s.id) === Number(data.shipmentId));
         if (!shipment) throw new Error("发货记录不存在");
@@ -1350,7 +1378,7 @@ export function useMockTrpc() {
         (shipment as any)[data.dimension] = data.value;
         // 记录时间戳
         const tsKey = data.dimension.replace("Status", "Date");
-        (shipment as any)[tsKey] = new Date().toISOString();
+        (shipment as any)[tsKey] = data.occurredAt ?? new Date().toISOString();
         // 回款金额更新
         if (data.amount !== undefined && data.dimension === "paymentStatus") {
           shipment.receivedAmount = String(Number(data.amount).toFixed(2));
@@ -2037,6 +2065,17 @@ export function useMockTrpc() {
       }, opts),
   };
 
+  // 保存销售订单发货批次备注
+  const salesOrderUpdateShipmentNote = {
+    useMutation: (opts?: any) =>
+      useMockMutation((data: { orderId: number; shipmentId: number; note: string }) => {
+        const shipment = (shipments[data.orderId] ?? []).find((item: any) => Number(item.id) === Number(data.shipmentId));
+        if (!shipment) throw new Error("发货记录不存在");
+        shipment.batchNote = data.note;
+        return { success: true };
+      }, opts),
+  };
+
   const sampleReminderList = {
     useQuery: (input?: any, opts?: any) =>
       useMockQuery((input?: any) => {
@@ -2091,32 +2130,23 @@ export function useMockTrpc() {
       useMockQuery(() => {
         const enriched = sampleOrders.map(enrichSampleOrder);
         const statuses = enriched.map((o: any) => o.orderStatus);
-        const totalAmount = enriched.reduce((s: number, o: any) => s + Number(o.totalAmount ?? 0), 0);
-        const receivedAmount = enriched.reduce((s: number, o: any) => s + Number(o.receivedAmount ?? 0), 0);
-        const now = new Date();
-        const monthPayments = Object.values(sampleShipments).flat().filter((s: any) =>
-          Number(s.receivedAmount ?? 0) > 0 &&
-          s.paymentDate &&
-          new Date(s.paymentDate).getFullYear() === now.getFullYear() &&
-          new Date(s.paymentDate).getMonth() === now.getMonth()
-        );
         return {
           orders: {
             total: enriched.length,
             inProgress: statuses.filter((s: string) => ["待排产", "生产中"].includes(s)).length,
             pendingReceipt: statuses.filter((s: string) => ["待签收", "部分待签收"].includes(s)).length,
-            pendingReconciliation: statuses.filter((s: string) => s === "待对账").length,
-            pendingPayment: statuses.filter((s: string) => s === "待付款").length,
+            pendingReconciliation: 0,
+            pendingPayment: 0,
             completed: statuses.filter((s: string) => s === "已完成").length,
             afterSales: statuses.filter((s: string) => s === "退货中").length,
             overdue: enriched.filter((o: any) => o.isOverdue).length,
-            totalAmount: totalAmount.toFixed(2),
-            receivedAmount: receivedAmount.toFixed(2),
+            totalAmount: "0.00",
+            receivedAmount: "0.00",
           },
           customers: { total: 0, active: 0, potential: 0 },
           payments: {
-            monthTotal: monthPayments.reduce((s: number, p: any) => s + Number(p.receivedAmount ?? 0), 0).toFixed(2),
-            monthCount: monthPayments.length,
+            monthTotal: "0.00",
+            monthCount: 0,
           },
         };
       }, undefined, opts),
@@ -2359,6 +2389,7 @@ export function useMockTrpc() {
       recordReturn: sampleOrderRecordReturn,
       updateAfterSales: sampleOrderUpdateAfterSales,
       updatePaymentDueDate: sampleOrderUpdatePaymentDueDate,
+      updateShipmentNote: sampleOrderUpdateShipmentNote,
     },
     salesOrder: {
       list: salesOrderList,
@@ -2372,6 +2403,7 @@ export function useMockTrpc() {
       recordReturn: salesOrderRecordReturn,
       updateAfterSales: salesOrderUpdateAfterSales,
       updatePaymentDueDate: salesOrderUpdatePaymentDueDate,
+      updateShipmentNote: salesOrderUpdateShipmentNote,
     },
     finance: {
       listPayments: financeListPayments,

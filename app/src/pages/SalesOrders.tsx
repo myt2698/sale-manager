@@ -58,9 +58,24 @@ const dimColors: Record<string, Record<string, string>> = {
 const cashDimensionOrder = ["shippingStatus", "receivingStatus"];
 // 账期(先货后款)发货批次流程
 const creditDimensionOrder = ["shippingStatus", "receivingStatus", "reconciliationStatus", "invoiceStatus", "paymentStatus"];
+const sampleDimensionOrder = ["shippingStatus", "receivingStatus"];
 // 获取流程类型对应的维度顺序
 function getDimensionOrder(flowType: string) {
+  if (flowType === "sample") return sampleDimensionOrder;
   return flowType === "cash" ? cashDimensionOrder : creditDimensionOrder;
+}
+
+function toLocalDateTimeInput(value?: string | Date | null) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function toIsoDateTime(value?: string) {
+  if (!value) return new Date().toISOString();
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
 }
 const afterSalesStatusColors: Record<string, string> = {
   无售后: "bg-gray-100 text-gray-500", 售后申请中: "bg-yellow-100 text-yellow-800",
@@ -102,7 +117,15 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
   const [selectedOrder, setSelectedOrder] = useState<number | null>(null);
   const [openDetail, setOpenDetail] = useState(false);
   const [openShippingForm, setOpenShippingForm] = useState(false);
-  const [shippingForm, setShippingForm] = useState({ shippedQty: "", productName: "" });
+  const [shippingForm, setShippingForm] = useState({ shippedQty: "", productName: "", productionTime: toLocalDateTimeInput() });
+  const [shipmentNotes, setShipmentNotes] = useState<Record<number, string>>({});
+  const [processAction, setProcessAction] = useState<{
+    shipmentId: number;
+    dimension: string;
+    value: string;
+    time: string;
+    action: "advance" | "rollback";
+  } | null>(null);
   const [openReturnForm, setOpenReturnForm] = useState(false);
   const [returnShipmentId, setReturnShipmentId] = useState<number | null>(null);
   const [returnForm, setReturnForm] = useState({ quantity: "", reason: "" });
@@ -132,11 +155,11 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
   const updateMutation = orderApi.update.useMutation({ onSuccess: () => { toast.success(`${orderKind}更新成功`); closeForm(); refetch(); } });
   const deleteMutation = orderApi.delete.useMutation({ onSuccess: () => { toast.success(`${orderKind}删除成功`); refetch(); } });
   const recordShipmentMutation = orderApi.recordShipment.useMutation({
-    onSuccess: () => { toast.success("发货记录已保存"); setOpenShippingForm(false); setShippingForm({ shippedQty: "", productName: "" }); refetch(); },
+    onSuccess: () => { toast.success("生产数量已安排"); setOpenShippingForm(false); setShippingForm({ shippedQty: "", productName: "", productionTime: toLocalDateTimeInput() }); refetch(); },
     onError: (err: any) => toast.error(err.message),
   });
   const updateShipmentStatusMutation = orderApi.updateShipmentStatus.useMutation({
-    onSuccess: () => { toast.success("状态已更新"); refetch(); }, onError: (err: any) => toast.error(err.message),
+    onSuccess: () => { toast.success("状态已更新"); setProcessAction(null); refetch(); }, onError: (err: any) => toast.error(err.message),
   });
   const recordReturnMutation = orderApi.recordReturn.useMutation({
     onSuccess: () => { toast.success("退货申请已提交"); setOpenReturnForm(false); setReturnForm({ quantity: "", reason: "" }); setReturnShipmentId(null); refetch(); },
@@ -148,6 +171,10 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
   });
   const updatePaymentDueDateMutation = orderApi.updatePaymentDueDate.useMutation({
     onSuccess: () => { toast.success("付款到期日已更新"); refetch(); },
+    onError: (err: any) => toast.error(err.message),
+  });
+  const updateShipmentNoteMutation = orderApi.updateShipmentNote.useMutation({
+    onSuccess: () => { toast.success("批次备注已保存"); refetch(); },
     onError: (err: any) => toast.error(err.message),
   });
   // 提醒
@@ -190,11 +217,11 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
     { key: "receivedAmount", label: "已收金额", checked: false },
     { key: "balance", label: "未收金额", checked: false },
     { key: "createdAt", label: "创建时间", checked: false },
-  ];
+  ].filter(field => !isSample || !["unitPrice", "totalAmount", "paymentTerms", "receivedAmount", "balance"].includes(field.key));
   const [selectedFields, setSelectedFields] = useState<string[]>(
     exportFields.filter(f => f.checked).map(f => f.key)
   );
-  const [reminderForm, setReminderForm] = useState({ content: "", remindDate: "", priority: "high", type: "对账提醒" });
+  const [reminderForm, setReminderForm] = useState({ content: "", remindDate: "", priority: "high", type: isSample ? "发货提醒" : "对账提醒" });
 
   // Form state
   const [formData, setFormData] = useState({
@@ -249,8 +276,12 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
     if (!formData.customerId) { toast.error("请选择客户"); return; }
     const validItems = items.filter(it => it.productName.trim() && it.productCode.trim() && parseFloat(it.quantity) > 0);
     if (validItems.length === 0) { toast.error("请至少添加一个有效的产品明细"); return; }
-    const submitItems = validItems.map(it => ({ ...it, subTotal: calcSubTotal(it.quantity, it.unitPrice) }));
-    const payload = { ...formData, items: submitItems };
+    const submitItems = validItems.map(it => isSample
+      ? { productId: it.productId, productName: it.productName, productCode: it.productCode, productModel: it.productModel, quantity: it.quantity }
+      : { ...it, subTotal: calcSubTotal(it.quantity, it.unitPrice) });
+    const payload = isSample
+      ? { ...formData, paymentTerms: undefined, items: submitItems }
+      : { ...formData, items: submitItems };
     if (isEditing && editId) updateMutation.mutate({ id: editId, data: payload });
     else createMutation.mutate(payload);
   };
@@ -301,17 +332,30 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
   };
 
   // 从发货记录或订单推断 flowType
-  const inferFlowType = (shipment: any) => shipment.flowType ?? (detailData?.paymentTerms === "0" || detailData?.paymentTerms === 0 ? "cash" : "credit");
+  const inferFlowType = (shipment: any) => isSample ? "sample" : shipment.flowType ?? (detailData?.paymentTerms === "0" || detailData?.paymentTerms === 0 ? "cash" : "credit");
   const getCurrentStep = (shipment: any): number => {
     const dims = getDimensionOrder(inferFlowType(shipment));
     for (let i = 0; i < dims.length; i++) { if (shipment[dims[i]] !== dimensionCompleteValue[dims[i]]) return i; }
     return -1;
   };
+  const openProcessAction = (shipment: any, dimension: string, value: string, action: "advance" | "rollback" = "advance") => {
+    setProcessAction({ shipmentId: shipment.id, dimension, value, time: toLocalDateTimeInput(), action });
+  };
+  const confirmProcessAction = () => {
+    if (!processAction) return;
+    updateShipmentStatusMutation.mutate({
+      orderId: detailData!.id,
+      shipmentId: processAction.shipmentId,
+      dimension: processAction.dimension,
+      value: processAction.value,
+      occurredAt: toIsoDateTime(processAction.time),
+    });
+  };
   const handleNext = (shipment: any) => {
     const step = getCurrentStep(shipment); if (step === -1) return;
     const dims = getDimensionOrder(inferFlowType(shipment));
     const dim = dims[step];
-    updateShipmentStatusMutation.mutate({ orderId: detailData!.id, shipmentId: shipment.id, dimension: dim, value: dimensionCompleteValue[dim] });
+    openProcessAction(shipment, dim, dimensionCompleteValue[dim]);
   };
   const handlePrev = (shipment: any) => {
     const dims = getDimensionOrder(inferFlowType(shipment));
@@ -319,13 +363,13 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
     for (let i = 0; i < dims.length; i++) { if (shipment[dims[i]] === dimensionCompleteValue[dims[i]]) lastCompleted = i; }
     if (lastCompleted === -1) return;
     const dim = dims[lastCompleted];
-    updateShipmentStatusMutation.mutate({ orderId: detailData!.id, shipmentId: shipment.id, dimension: dim, value: dimensionInitValue[dim] });
+    openProcessAction(shipment, dim, dimensionInitValue[dim], "rollback");
   };
-  const handleShipConfirm = () => {
-    if (!shippingForm.shippedQty || parseFloat(shippingForm.shippedQty) <= 0) { toast.error("请填写发货数量"); return; }
+  const handleProductionConfirm = () => {
+    if (!shippingForm.shippedQty || parseFloat(shippingForm.shippedQty) <= 0) { toast.error("请填写安排生产数量"); return; }
     const remaining = Number(detailData!.quantity) - Number(detailData!.shippedTotal ?? 0);
-    if (parseFloat(shippingForm.shippedQty) > remaining) { toast.error(`发货数量不能超过剩余 ${remaining} kg`); return; }
-    recordShipmentMutation.mutate({ orderId: detailData!.id, quantity: shippingForm.shippedQty, productName: shippingForm.productName, logisticsCompany: "", logisticsNo: "" });
+    if (parseFloat(shippingForm.shippedQty) > remaining) { toast.error(`安排生产数量不能超过剩余 ${remaining} kg`); return; }
+    recordShipmentMutation.mutate({ orderId: detailData!.id, quantity: shippingForm.shippedQty, productName: shippingForm.productName, logisticsCompany: "", logisticsNo: "", productionTime: toIsoDateTime(shippingForm.productionTime) });
   };
 
   const totalPages = Math.ceil((data?.total ?? 0) / (data?.pageSize ?? 10));
@@ -377,7 +421,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
               <TableHead className="text-xs font-semibold text-gray-500">客户</TableHead>
               <TableHead className="text-xs font-semibold text-gray-500">产品明细</TableHead>
               <TableHead className="text-xs font-semibold text-gray-500 text-right">数量</TableHead>
-              <TableHead className="text-xs font-semibold text-gray-500 text-right">金额</TableHead>
+              {!isSample && <TableHead className="text-xs font-semibold text-gray-500 text-right">金额</TableHead>}
               <TableHead className="text-xs font-semibold text-gray-500 text-center">状态</TableHead>
               <TableHead className="text-xs font-semibold text-gray-500 text-right w-[120px]">操作</TableHead>
             </TableRow>
@@ -406,7 +450,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                   {!(order.items ?? []).length && <div className="text-xs text-gray-500">{order.productName}</div>}
                 </TableCell>
                 <TableCell className="py-3 text-right"><span className="text-sm font-medium text-gray-700">{order.quantity}</span><span className="text-xs text-gray-400 ml-1">kg</span></TableCell>
-                <TableCell className="py-3 text-right">{privacyMode ? <span className="text-sm text-gray-300 tracking-widest">****</span> : <span className="text-sm font-semibold text-gray-900">¥{Number(order.totalAmount).toLocaleString()}</span>}</TableCell>
+                {!isSample && <TableCell className="py-3 text-right">{privacyMode ? <span className="text-sm text-gray-300 tracking-widest">****</span> : <span className="text-sm font-semibold text-gray-900">¥{Number(order.totalAmount).toLocaleString()}</span>}</TableCell>}
                 <TableCell className="py-3 text-center"><Badge className={`${statusColors[order.orderStatus] ?? ""} text-xs px-2.5 py-0.5 rounded-full`}>{order.orderStatus}</Badge></TableCell>
                 <TableCell className="py-3 text-right">
                   <div className="flex justify-end gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
@@ -505,14 +549,14 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                 <div className="bg-gray-50 rounded-lg p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5"><ClipboardCheck size={15} className="text-indigo-500" />产品明细</h4>
-                    <span className="text-xs text-gray-400">共 {items.length} 行 | 合计 ¥{totalAmount.toLocaleString()}</span>
+                    <span className="text-xs text-gray-400">共 {items.length} 行{!isSample && ` | 合计 ¥${totalAmount.toLocaleString()}`}</span>
                   </div>
                   {/* Header */}
-                  <div className="grid grid-cols-[1fr_80px_1fr_1fr_100px_100px_100px_40px] gap-2 text-[10px] text-gray-400 font-medium uppercase">
-                    <span>产品名称</span><span></span><span>料号</span><span>型号</span><span className="text-right">数量(kg)</span><span className="text-right">单价</span><span className="text-right">小计</span><span></span>
+                  <div className={`grid ${isSample ? "grid-cols-[1fr_80px_1fr_1fr_100px_40px]" : "grid-cols-[1fr_80px_1fr_1fr_100px_100px_100px_40px]"} gap-2 text-[10px] text-gray-400 font-medium uppercase`}>
+                    <span>产品名称</span><span></span><span>料号</span><span>型号</span><span className="text-right">数量(kg)</span>{!isSample && <><span className="text-right">单价</span><span className="text-right">小计</span></>}<span></span>
                   </div>
                   {items.map((it, idx) => (
-                    <div key={idx} className="grid grid-cols-[1fr_80px_1fr_1fr_100px_100px_100px_40px] gap-2 items-start">
+                    <div key={idx} className={`grid ${isSample ? "grid-cols-[1fr_80px_1fr_1fr_100px_40px]" : "grid-cols-[1fr_80px_1fr_1fr_100px_100px_100px_40px]"} gap-2 items-start`}>
                       <Input className="text-xs" value={it.productName} onChange={e => updateItem(idx, "productName", e.target.value)} placeholder="产品名称" />
                       <select className="text-xs h-9 border rounded-md px-1 bg-white cursor-pointer" value={it.productId ?? ""} onChange={e => { if (e.target.value) selectProductForItem(idx, e.target.value); }}>
                         <option value="">选择产品</option>
@@ -521,8 +565,8 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                       <Input className="text-xs" value={it.productCode} onChange={e => updateItem(idx, "productCode", e.target.value)} placeholder="料号" />
                       <Input className="text-xs" value={it.productModel} onChange={e => updateItem(idx, "productModel", e.target.value)} placeholder="型号" />
                       <Input className="text-xs text-right" type="number" step="0.01" value={it.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} />
-                      <Input className="text-xs text-right" type="number" step="0.0001" value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
-                      <Input className="text-xs text-right bg-emerald-50 font-semibold text-emerald-700" value={it.subTotal ? `¥${it.subTotal}` : "--"} readOnly />
+                      {!isSample && <><Input className="text-xs text-right" type="number" step="0.0001" value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
+                      <Input className="text-xs text-right bg-emerald-50 font-semibold text-emerald-700" value={it.subTotal ? `¥${it.subTotal}` : "--"} readOnly /></>}
                       <button type="button" className="text-gray-300 hover:text-red-400 transition-colors pt-2" onClick={() => removeItem(idx)}><X size={14} /></button>
                     </div>
                   ))}
@@ -535,13 +579,13 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                   <div className="grid grid-cols-3 gap-3">
                     <div className="flex items-center gap-2 p-2 border rounded-md"><input type="checkbox" id="hsi" className="w-4 h-4" checked={formData.hasShippingInfo} onChange={e => setFormData(p => ({ ...p, hasShippingInfo: e.target.checked }))} /><label htmlFor="hsi" className="text-xs cursor-pointer"><span className="font-medium">已核对收货信息</span></label></div>
                     <div className="flex items-center gap-2 p-2 border rounded-md"><input type="checkbox" id="hsr" className="w-4 h-4" checked={formData.hasSpecialRequirements} onChange={e => setFormData(p => ({ ...p, hasSpecialRequirements: e.target.checked }))} /><label htmlFor="hsr" className="text-xs cursor-pointer"><span className="font-medium">已核对特殊签收要求</span></label></div>
-                    <div><Label className="text-xs text-gray-500">账期</Label><Select value={formData.paymentTerms} onValueChange={v => setFormData(p => ({ ...p, paymentTerms: v }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="0">现款</SelectItem><SelectItem value="30">30天</SelectItem><SelectItem value="60">60天</SelectItem><SelectItem value="90">90天</SelectItem></SelectContent></Select></div>
+                    {!isSample && <div><Label className="text-xs text-gray-500">账期</Label><Select value={formData.paymentTerms} onValueChange={v => setFormData(p => ({ ...p, paymentTerms: v }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="0">现款</SelectItem><SelectItem value="30">30天</SelectItem><SelectItem value="60">60天</SelectItem><SelectItem value="90">90天</SelectItem></SelectContent></Select></div>}
                   </div>
                   <div><Label className="text-xs text-gray-500">备注</Label><textarea className="w-full border rounded-md p-2 text-sm mt-1" rows={2} value={formData.notes} onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))} /></div>
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2">
-                  <div className="flex-1 text-sm text-gray-500 flex items-center">合计: <span className="font-bold text-gray-800 ml-1">¥{totalAmount.toLocaleString()}</span> <span className="ml-3">{totalQty} kg</span></div>
+                  <div className="flex-1 text-sm text-gray-500 flex items-center">{isSample ? "总数量:" : "合计:"} {!isSample && <span className="font-bold text-gray-800 ml-1">¥{totalAmount.toLocaleString()}</span>} <span className="ml-3">{totalQty} kg</span></div>
                   <Button type="button" variant="outline" onClick={closeForm}>取消</Button>
                   <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>{isEditing ? "保存" : "创建"}</Button>
                 </div>
@@ -564,11 +608,11 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
             <div className="space-y-4">
               {/* Overview */}
               <div className="border rounded-lg p-3 bg-white">
-                <div className="flex items-center justify-between mb-2"><span className="text-xs text-gray-400">财务概览</span><span className="text-xs text-gray-400">{Number(detailData.shippedTotal ?? 0).toFixed(2)} / {detailData.quantity} kg 已发</span></div>
-                {Number(detailData.actualShippedQty ?? 0) > 0 && !privacyMode && (
+                <div className="flex items-center justify-between mb-2"><span className="text-xs text-gray-400">{isSample ? "订单进度" : "财务概览"}</span><span className="text-xs text-gray-400">{Number(detailData.shippedTotal ?? 0).toFixed(2)} / {detailData.quantity} kg 已发</span></div>
+                {!isSample && Number(detailData.actualShippedQty ?? 0) > 0 && !privacyMode && (
                   <div className="mb-2 text-sm"><span className="text-gray-400 text-xs">已发货金额:</span> <span className="font-semibold text-blue-600">¥{(Number(detailData.actualShippedQty ?? 0) * Number(detailData.unitPrice ?? 0)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>
                 )}
-                <div className="flex items-center gap-3 text-sm">
+                {!isSample && <div className="flex items-center gap-3 text-sm">
                   <div className="flex items-center gap-1"><span className="text-gray-400 text-xs">订单</span>{privacyMode ? <span className="text-sm text-gray-300 tracking-widest">****</span> : <span className="font-semibold">¥{Number(detailData.totalAmount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>}</div>
                   <div className="w-px h-3 bg-gray-200" />
                   <div className="flex items-center gap-1"><span className="text-gray-400 text-xs">已收</span>{privacyMode ? <span className="text-sm text-gray-300 tracking-widest">****</span> : <span className="font-semibold text-green-600">¥{Number(detailData.receivedAmount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>}</div>
@@ -578,7 +622,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                   {(Number(detailData.refundedAmount ?? 0) > 0) && (
                     <><div className="w-px h-3 bg-gray-200" /><div className="flex items-center gap-1"><span className="text-gray-400 text-xs">退款</span>{privacyMode ? <span className="text-sm text-gray-300 tracking-widest">****</span> : <span className="font-semibold text-orange-600">¥{Number(detailData.refundedAmount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>}</div></>
                   )}
-                </div>
+                </div>}
                 <div className="mt-2"><div className="flex items-center justify-between text-xs mb-1"><span className="text-gray-400">发货进度</span><span className="text-gray-500">{Number(detailData.quantity) > 0 ? Math.round((Number(detailData.shippedTotal ?? 0) / Number(detailData.quantity)) * 100) : 0}%</span></div><div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${Number(detailData.quantity) > 0 ? Math.min(100, (Number(detailData.shippedTotal ?? 0) / Number(detailData.quantity)) * 100) : 0}%` }} /></div></div>
               </div>
 
@@ -586,7 +630,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
               <div className="border rounded-lg overflow-hidden">
                 <div className="bg-gray-50 px-4 py-2 text-xs font-semibold text-gray-500">产品明细</div>
                 <table className="w-full text-sm whitespace-nowrap">
-                  <thead><tr className="border-b"><th className="text-left px-4 py-2 text-xs text-gray-400 w-full">产品</th><th className="text-right px-3 py-2 text-xs text-gray-400">数量</th>{!privacyMode && <><th className="text-right px-3 py-2 text-xs text-gray-400">单价</th><th className="text-right px-4 py-2 text-xs text-gray-400">小计</th></>}</tr></thead>
+                  <thead><tr className="border-b"><th className="text-left px-4 py-2 text-xs text-gray-400 w-full">产品</th><th className="text-right px-3 py-2 text-xs text-gray-400">数量</th>{!isSample && !privacyMode && <><th className="text-right px-3 py-2 text-xs text-gray-400">单价</th><th className="text-right px-4 py-2 text-xs text-gray-400">小计</th></>}</tr></thead>
                   <tbody>
                     {(detailData.items ?? []).map((it: any, i: number) => {
                       const liveProduct = resolveProduct(it.productId);
@@ -595,7 +639,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                       const productCode = liveProduct?.productCode ?? it.productCode ?? "";
                       const productModel = liveProduct?.productModel ?? it.productModel ?? "";
                       return (
-                        <tr key={i} className="border-b last:border-b-0"><td className="px-4 py-2"><div className="font-medium text-gray-800 text-sm">{categoryName ? `${categoryName}/` : ""}{productName}</div><div className="text-[10px] text-gray-400">{productCode} {productModel}</div></td><td className="px-3 py-2 text-right text-sm">{it.quantity} <span className="text-gray-400 text-xs">kg</span></td>{!privacyMode && <><td className="px-3 py-2 text-right text-sm">¥{Number(it.unitPrice).toLocaleString()}</td><td className="px-4 py-2 text-right font-semibold text-sm">¥{Number(it.subTotal ?? it.quantity * it.unitPrice).toLocaleString()}</td></>}</tr>
+                        <tr key={i} className="border-b last:border-b-0"><td className="px-4 py-2"><div className="font-medium text-gray-800 text-sm">{categoryName ? `${categoryName}/` : ""}{productName}</div><div className="text-[10px] text-gray-400">{productCode} {productModel}</div></td><td className="px-3 py-2 text-right text-sm">{it.quantity} <span className="text-gray-400 text-xs">kg</span></td>{!isSample && !privacyMode && <><td className="px-3 py-2 text-right text-sm">¥{Number(it.unitPrice).toLocaleString()}</td><td className="px-4 py-2 text-right font-semibold text-sm">¥{Number(it.subTotal ?? it.quantity * it.unitPrice).toLocaleString()}</td></>}</tr>
                       );
                     })}
                   </tbody>
@@ -606,7 +650,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                 <div><span className="text-gray-400">客户:</span> {detailData.customerName}</div>
                 <div><span className="text-gray-400">客户订单号:</span> {detailData.customerOrderNo || "-"}</div>
                 <div><span className="text-gray-400">订单日期:</span> {detailData.orderDate ? new Date(detailData.orderDate).toLocaleDateString() : "-"}</div>
-                <div><span className="text-gray-400">账期:</span> {detailData.paymentTerms === "0" || detailData.paymentTerms === 0 ? "现款" : `${detailData.paymentTerms}天`}</div>
+                {!isSample && <div><span className="text-gray-400">账期:</span> {detailData.paymentTerms === "0" || detailData.paymentTerms === 0 ? "现款" : `${detailData.paymentTerms}天`}</div>}
                 <div className="col-span-2"><span className="text-gray-400">状态:</span> <Badge className={statusColors[detailData.orderStatus] ?? ""}>{detailData.orderStatus}</Badge></div>
                 {detailData.notes && (
                   <div className="col-span-2 mt-1"><span className="text-gray-400">备注:</span> <span className="text-sm text-gray-600">{detailData.notes}</span></div>
@@ -623,7 +667,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                           <span className="text-xs font-medium text-gray-400">批次 #{idx + 1}</span>
                           <span className="font-semibold text-gray-900">{Number(s.quantity).toFixed(2)} kg</span>
                           {s.productName && <><span className="text-gray-300">|</span><span className="text-xs text-blue-600">{s.productName}</span></>}
-                          {!privacyMode && detailData.unitPrice && s.shippingStatus === "已发货" && (
+                          {!isSample && !privacyMode && detailData.unitPrice && s.shippingStatus === "已发货" && (
                             <><span className="text-gray-300">|</span><span className="text-xs font-semibold text-emerald-600">¥{(Number(s.quantity) * Number(detailData.unitPrice)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></>
                           )}
                         </div>
@@ -637,7 +681,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                       <div className="p-3">
                         <div className="flex items-center gap-1 mb-3">
                           {(() => {
-                            const flowType = s.flowType ?? (detailData.paymentTerms === "0" || detailData.paymentTerms === 0 ? "cash" : "credit");
+                            const flowType = inferFlowType(s);
                             const dims = getDimensionOrder(flowType);
                             return dims.map((dim, di) => {
                               const isComplete = s[dim] === dimensionCompleteValue[dim];
@@ -667,7 +711,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                           </div>
                           {/* 现款订单额外显示付款/票据状态，支持独立切换 */}
                           {/* 判断是否为现款：优先用发货记录的 flowType，否则从订单 paymentTerms 推断 */}
-                          {((s.flowType ?? (detailData.paymentTerms === "0" || detailData.paymentTerms === 0 ? "cash" : "credit")) === "cash") && (
+                          {!isSample && ((s.flowType ?? (detailData.paymentTerms === "0" || detailData.paymentTerms === 0 ? "cash" : "credit")) === "cash") && (
                             <>
                               <div className="flex items-center gap-1">
                                 <span className="text-xs text-gray-400">付款:</span>
@@ -675,7 +719,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                                   size="sm"
                                   variant={s.paymentStatus === "已支付" ? "default" : "default"}
                                   className={`h-7 text-xs px-3 py-0 rounded-full font-semibold shadow-sm transition-all ${s.paymentStatus === "已支付" ? "bg-green-600 hover:bg-green-700 text-white" : "bg-amber-500 hover:bg-amber-600 text-white animate-pulse"}`}
-                                  onClick={() => updateShipmentStatusMutation.mutate({ orderId: detailData!.id, shipmentId: s.id, dimension: "paymentStatus", value: s.paymentStatus === "已支付" ? "待支付" : "已支付" })}
+                                  onClick={() => openProcessAction(s, "paymentStatus", s.paymentStatus === "已支付" ? "待支付" : "已支付", s.paymentStatus === "已支付" ? "rollback" : "advance")}
                                 >
                                   {s.paymentStatus === "已支付" ? "✓ 已支付" : "⚠ 待支付"}
                                 </Button>
@@ -686,7 +730,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                                   size="sm"
                                   variant={s.invoiceStatus === "已开票" ? "default" : "default"}
                                   className={`h-7 text-xs px-3 py-0 rounded-full font-semibold shadow-sm transition-all ${s.invoiceStatus === "已开票" ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-sky-500 hover:bg-sky-600 text-white animate-pulse"}`}
-                                  onClick={() => updateShipmentStatusMutation.mutate({ orderId: detailData!.id, shipmentId: s.id, dimension: "invoiceStatus", value: s.invoiceStatus === "已开票" ? "待开票" : "已开票" })}
+                                  onClick={() => openProcessAction(s, "invoiceStatus", s.invoiceStatus === "已开票" ? "待开票" : "已开票", s.invoiceStatus === "已开票" ? "rollback" : "advance")}
                                 >
                                   {s.invoiceStatus === "已开票" ? "✓ 已开票" : "⚠ 待开票"}
                                 </Button>
@@ -695,14 +739,14 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                           )}
                         </div>
                         {/* 付款到期日设置 */}
-                        <div className="flex items-center gap-2 mb-3 p-2 bg-amber-50/50 rounded-md">
+                        {!isSample && <div className="flex items-center gap-2 mb-3 p-2 bg-amber-50/50 rounded-md">
                           <Clock size={12} className="text-amber-500 flex-shrink-0" />
-                          <span className="text-xs text-gray-500">付款到期日:</span>
+                          <span className="text-xs text-gray-500 flex-shrink-0">付款到期日:</span>
                           {s.paymentStatus === "待支付" || s.paymentStatus === "部分付款" ? (
                             <>
                               <input
                                 type="date"
-                                className="h-6 border rounded px-2 text-xs flex-1"
+                                className="h-6 w-[132px] flex-shrink-0 border rounded px-2 text-xs bg-white"
                                 value={s.paymentDueDate ?? ""}
                                 onChange={e => updatePaymentDueDateMutation.mutate({ orderId: detailData!.id, shipmentId: s.id, paymentDueDate: e.target.value })}
                               />
@@ -719,12 +763,27 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                               )}
                             </>
                           ) : (
-                            <span className="text-xs text-gray-400">{s.paymentDueDate ? new Date(s.paymentDueDate).toLocaleDateString() + " (已付)" : "—"}</span>
+                            <span className="w-[132px] flex-shrink-0 text-xs text-gray-400">{s.paymentDueDate ? new Date(s.paymentDueDate).toLocaleDateString() + " (已付)" : "—"}</span>
                           )}
-                        </div>
+                          <div className="mx-1 h-5 w-px flex-shrink-0 bg-amber-200" />
+                          <span className="text-xs text-gray-500 flex-shrink-0">批次备注:</span>
+                          <input
+                            type="text"
+                            className="h-6 min-w-0 flex-1 rounded border bg-white px-2 text-xs"
+                            placeholder="填写该批次的备注..."
+                            value={shipmentNotes[s.id] ?? s.batchNote ?? ""}
+                            onChange={event => setShipmentNotes(current => ({ ...current, [s.id]: event.target.value }))}
+                            onBlur={event => {
+                              const note = event.target.value.trim();
+                              if (note !== (s.batchNote ?? "")) {
+                                updateShipmentNoteMutation.mutate({ orderId: detailData!.id, shipmentId: s.id, note });
+                              }
+                            }}
+                          />
+                        </div>}
                         <div className="flex items-center gap-2 pt-2 border-t">
                           {(() => {
-                            const flowType = s.flowType ?? (detailData.paymentTerms === "0" || detailData.paymentTerms === 0 ? "cash" : "credit");
+                            const flowType = inferFlowType(s);
                             const dims = getDimensionOrder(flowType);
                             const step = getCurrentStep(s);
                             return (<>
@@ -768,7 +827,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
 
               {/* Continue Ship */}
               {Number(detailData.shippedTotal ?? 0) < Number(detailData.quantity) && (
-                <Button onClick={() => { setShippingForm({ shippedQty: String(Number(detailData.quantity) - Number(detailData.shippedTotal ?? 0)), productName: (detailData.items?.[0]?.productName) ?? "" }); setOpenShippingForm(true); }} variant="secondary" className="w-full"><ClipboardCheck size={14} className="mr-1" />安排生产数量 (剩{(Number(detailData.quantity) - Number(detailData.shippedTotal ?? 0)).toFixed(2)}kg)</Button>
+                <Button onClick={() => { setShippingForm({ shippedQty: String(Number(detailData.quantity) - Number(detailData.shippedTotal ?? 0)), productName: (detailData.items?.[0]?.productName) ?? "", productionTime: toLocalDateTimeInput() }); setOpenShippingForm(true); }} variant="secondary" className="w-full"><ClipboardCheck size={14} className="mr-1" />安排生产数量 (剩{(Number(detailData.quantity) - Number(detailData.shippedTotal ?? 0)).toFixed(2)}kg)</Button>
               )}
 
               {/* 提醒面板 */}
@@ -779,7 +838,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                     <span className="text-xs font-semibold text-amber-700">提醒事项</span>
                     <Badge className="bg-amber-100 text-amber-700 text-[10px]">{(remindersData?.items ?? []).length}条</Badge>
                   </div>
-                  <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => { setReminderForm({ content: "", remindDate: new Date().toISOString().split("T")[0], priority: "high", type: "对账提醒" }); setShowReminderForm(true); }}>
+                  <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => { setReminderForm({ content: "", remindDate: new Date().toISOString().split("T")[0], priority: "high", type: isSample ? "发货提醒" : "对账提醒" }); setShowReminderForm(true); }}>
                     <Plus size={12} className="mr-1" />添加
                   </Button>
                 </div>
@@ -789,11 +848,11 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                     <div className="flex gap-2">
                       {/* 提醒类型下拉选择框 */}
                       <select className="h-7 border rounded-md px-2 text-xs bg-white flex-shrink-0" value={reminderForm.type} onChange={e => setReminderForm(f => ({ ...f, type: e.target.value }))}>
-                        <option value="对账提醒">对账提醒</option>
-                        <option value="付款提醒">付款提醒</option>
+                        {!isSample && <option value="对账提醒">对账提醒</option>}
+                        {!isSample && <option value="付款提醒">付款提醒</option>}
                         <option value="发货提醒">发货提醒</option>
                         <option value="签收提醒">签收提醒</option>
-                        <option value="开票提醒">开票提醒</option>
+                        {!isSample && <option value="开票提醒">开票提醒</option>}
                         <option value="其他提醒">其他提醒</option>
                       </select>
                       <input type="date" className="h-7 border rounded-md px-2 text-xs flex-shrink-0" value={reminderForm.remindDate} onChange={e => setReminderForm(f => ({ ...f, remindDate: e.target.value }))} />
@@ -804,7 +863,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                         if (!reminderForm.remindDate) { toast.error("请选择提醒日期"); return; }
                         createReminderMutation.mutate({ orderId: detailData!.id, content: reminderForm.content, remindDate: reminderForm.remindDate, priority: reminderForm.priority, type: reminderForm.type });
                         setShowReminderForm(false);
-                        setReminderForm({ content: "", remindDate: "", priority: "high", type: "对账提醒" });
+                        setReminderForm({ content: "", remindDate: "", priority: "high", type: isSample ? "发货提醒" : "对账提醒" });
                       }}>保存</Button>
                       <Button size="sm" variant="outline" className="h-7 text-[11px] px-2" onClick={() => setShowReminderForm(false)}>取消</Button>
                     </div>
@@ -847,26 +906,61 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
         </div>
       )}
 
-      {/* Shipping Form */}
+      {/* Production Arrangement Form */}
       <Dialog open={openShippingForm} onOpenChange={setOpenShippingForm}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Truck size={18} className="text-blue-500" />发货登记</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><ClipboardCheck size={18} className="text-blue-500" />安排生产数量</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="bg-gray-50 rounded-lg p-3 grid grid-cols-3 gap-2 text-center">
               <div><p className="text-xs text-gray-400">订单总量</p><p className="text-sm font-bold">{detailData?.quantity} kg</p></div>
-              <div><p className="text-xs text-gray-400">已发货</p><p className="text-sm font-bold text-green-600">{Number(detailData?.shippedTotal ?? 0).toFixed(2)} kg</p></div>
+              <div><p className="text-xs text-gray-400">已安排生产</p><p className="text-sm font-bold text-green-600">{Number(detailData?.shippedTotal ?? 0).toFixed(2)} kg</p></div>
               <div><p className="text-xs text-gray-400">剩余</p><p className="text-sm font-bold text-red-600">{Number(detailData?.remainingQty ?? detailData?.quantity).toFixed(2)} kg</p></div>
             </div>
             <div>
-              <Label className="text-xs text-gray-500">发货产品</Label>
+              <Label className="text-xs text-gray-500">生产产品</Label>
               <select className="mt-1 w-full h-9 border rounded-md px-2 text-sm" value={shippingForm.productName} onChange={e => setShippingForm(p => ({ ...p, productName: e.target.value }))}>
                 <option value="">选择产品</option>
                 {(detailData?.items ?? []).map((it: any, i: number) => <option key={i} value={it.productName}>{it.productName} ({it.productCode})</option>)}
               </select>
             </div>
-            <div><Label className="text-xs text-gray-500">本次发货数量 (kg) *</Label><Input className="mt-1" type="number" step="0.01" min="0.01" value={shippingForm.shippedQty} onChange={e => setShippingForm(p => ({ ...p, shippedQty: e.target.value }))} /></div>
-            <div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setOpenShippingForm(false)}>取消</Button><Button onClick={handleShipConfirm} disabled={recordShipmentMutation.isPending}>确认发货</Button></div>
+            <div><Label className="text-xs text-gray-500">本次安排生产数量 (kg) *</Label><Input className="mt-1" type="number" step="0.01" min="0.01" value={shippingForm.shippedQty} onChange={e => setShippingForm(p => ({ ...p, shippedQty: e.target.value }))} /></div>
+            <div><Label className="text-xs text-gray-500">安排生产时间 *</Label><Input className="mt-1" type="datetime-local" value={shippingForm.productionTime} onChange={e => setShippingForm(p => ({ ...p, productionTime: e.target.value }))} /></div>
+            <div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setOpenShippingForm(false)}>取消</Button><Button onClick={handleProductionConfirm} disabled={recordShipmentMutation.isPending}>确认安排</Button></div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Process Time Confirmation */}
+      <Dialog open={!!processAction} onOpenChange={open => { if (!open && !updateShipmentStatusMutation.isPending) setProcessAction(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {processAction?.action === "rollback" ? "确认回退" : "确认流程时间"}
+            </DialogTitle>
+          </DialogHeader>
+          {processAction && (
+            <div className="space-y-4 mt-2">
+              <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-800">
+                {processAction.action === "rollback" ? "回退" : "推进"}「{dimensionLabels[processAction.dimension]}」
+                <span className="ml-2 text-xs text-blue-500">状态：{processAction.value}</span>
+              </div>
+              <div>
+                <Label className="text-xs text-gray-500">
+                  {dimensionLabels[processAction.dimension]}时间 *
+                </Label>
+                <Input
+                  className="mt-1"
+                  type="datetime-local"
+                  value={processAction.time}
+                  onChange={event => setProcessAction(current => current ? { ...current, time: event.target.value } : current)}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setProcessAction(null)} disabled={updateShipmentStatusMutation.isPending}>取消</Button>
+                <Button onClick={confirmProcessAction} disabled={!processAction.time || updateShipmentStatusMutation.isPending}>确认</Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -933,9 +1027,11 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                   { label: "安排生产", date: timelineShipment.productionDate ?? timelineShipment.shippedDate },
                   { label: "发货", date: timelineShipment.shippingDate },
                   { label: "签收", date: timelineShipment.receivingDate },
-                  { label: "对账", date: timelineShipment.reconciliationDate },
-                  { label: "开票", date: timelineShipment.invoiceDate },
-                  { label: "付款", date: timelineShipment.paymentDate },
+                  ...(!isSample ? [
+                    { label: "对账", date: timelineShipment.reconciliationDate },
+                    { label: "开票", date: timelineShipment.invoiceDate },
+                    { label: "付款", date: timelineShipment.paymentDate },
+                  ] : []),
                 ].filter(r => r.date);
                 if (records.length === 0) return <div className="text-center text-gray-400 text-xs py-4">暂无操作记录</div>;
                 return records.map((r, i) => (
