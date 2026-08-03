@@ -560,7 +560,11 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                       <Input className="text-xs" value={it.productName} onChange={e => updateItem(idx, "productName", e.target.value)} placeholder="产品名称" />
                       <select className="text-xs h-9 border rounded-md px-1 bg-white cursor-pointer" value={it.productId ?? ""} onChange={e => { if (e.target.value) selectProductForItem(idx, e.target.value); }}>
                         <option value="">选择产品</option>
-                        {(productsData?.items ?? []).map((p: any) => <option key={p.id} value={p.id}>{p.productName}</option>)}
+                        {(productsData?.items ?? []).map((p: any) => (
+                          <option key={p.id} value={p.id}>
+                            {p.productName} ｜ 料号：{p.productCode || "-"} ｜ 型号：{p.productModel || "-"}
+                          </option>
+                        ))}
                       </select>
                       <Input className="text-xs" value={it.productCode} onChange={e => updateItem(idx, "productCode", e.target.value)} placeholder="料号" />
                       <Input className="text-xs" value={it.productModel} onChange={e => updateItem(idx, "productModel", e.target.value)} placeholder="型号" />
