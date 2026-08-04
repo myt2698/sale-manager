@@ -132,6 +132,8 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
   const [returnShipmentId, setReturnShipmentId] = useState<number | null>(null);
   const [returnForm, setReturnForm] = useState({ quantity: "", reason: "" });
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [showPaymentPage, setShowPaymentPage] = useState(false);
+  const [paymentPageOrderId, setPaymentPageOrderId] = useState<number | null>(null);
   const [paymentForm, setPaymentForm] = useState({
     orderId: 0, amount: "", paymentMethod: "银行转账",
     paymentDate: new Date().toISOString().split("T")[0], payerName: "", notes: "",
@@ -155,8 +157,8 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
   );
   const { data: productsData } = trpc.product.list.useQuery({});
   const { data: paymentsData, refetch: refetchPayments } = trpc.finance.listPayments.useQuery(
-    { orderId: selectedOrder ?? undefined, page: 1, pageSize: 200 },
-    { enabled: !isSample && !!selectedOrder }
+    { orderId: paymentPageOrderId ?? undefined, page: 1, pageSize: 200 },
+    { enabled: !isSample && showPaymentPage }
   );
 
   // 根据 productId 实时查询产品信息（产品修改后订单显示同步更新）
@@ -400,14 +402,21 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
     recordShipmentMutation.mutate({ orderId: detailData!.id, quantity: shippingForm.shippedQty, productName: shippingForm.productName, logisticsCompany: "", logisticsNo: "", productionTime: toIsoDateTime(shippingForm.productionTime) });
   };
 
-  const openPaymentRegistration = () => {
-    if (!detailData) return;
+  const openPaymentPage = (orderId?: number) => {
+    setPaymentPageOrderId(orderId ?? null);
+    setShowPaymentForm(false);
+    setShowPaymentPage(true);
+  };
+  const openPaymentRegistration = (orderId?: number) => {
+    const targetId = orderId ?? paymentPageOrderId ?? detailData?.id ?? (allData?.items?.[0]?.id ?? 0);
+    const order = targetId === detailData?.id ? detailData : (allData?.items ?? []).find((item: any) => item.id === targetId);
+    if (!order) { toast.error("请先选择销售订单"); return; }
     setPaymentForm({
-      orderId: detailData.id,
-      amount: Number(detailData.balance) > 0 ? Number(detailData.balance).toFixed(2) : "",
+      orderId: order.id,
+      amount: Number(order.balance) > 0 ? Number(order.balance).toFixed(2) : "",
       paymentMethod: "银行转账",
       paymentDate: new Date().toISOString().split("T")[0],
-      payerName: detailData.customerName || "",
+      payerName: order.customerName || "",
       notes: "",
     });
     setShowPaymentForm(true);
@@ -477,6 +486,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
               {Object.keys(statusColors).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
+          {!isSample && <Button size="sm" variant="outline" onClick={() => openPaymentPage()}><CreditCard size={16} className="mr-1" />回款记录</Button>}
           <Button size="sm" variant="outline" onClick={() => setShowExportDialog(true)}><FileText size={16} className="mr-1" />导出</Button>
           <Button size="sm" onClick={() => { resetForm(); setIsEditing(false); setShowForm(true); }}><Plus size={16} className="mr-1" />新建</Button>
         </div>
@@ -529,7 +539,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                   {!(order.items ?? []).length && <div className="text-xs text-gray-500">{order.productName}</div>}
                 </TableCell>
                 <TableCell className="py-3 text-right"><span className="text-sm font-medium text-gray-700">{order.quantity}</span><span className="text-xs text-gray-400 ml-1">kg</span></TableCell>
-                {!isSample && <TableCell className="py-3 text-right">{privacyMode ? <span className="text-sm text-gray-300 tracking-widest">****</span> : <div><div className="text-sm font-semibold text-gray-900">¥{Number(order.totalAmount).toLocaleString()}</div><div className="text-[10px] text-green-600">已收 ¥{Number(order.receivedAmount).toLocaleString()}</div><div className="text-[10px] text-red-500">未收 ¥{Number(order.balance).toLocaleString()}</div></div>}</TableCell>}
+                {!isSample && <TableCell className="py-3 text-right">{privacyMode ? <span className="text-sm text-gray-300 tracking-widest">****</span> : <div><div className="text-sm font-semibold text-gray-900">¥{Number(order.totalAmount).toLocaleString()}</div><div className="text-[10px] text-red-500">未收 ¥{Number(order.balance).toLocaleString()}</div></div>}</TableCell>}
                 <TableCell className="py-3 text-center"><Badge className={`${statusColors[order.orderStatus] ?? ""} text-xs px-2.5 py-0.5 rounded-full`}>{order.orderStatus}</Badge></TableCell>
                 <TableCell className="py-3 text-right">
                   <div className="flex justify-end gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
@@ -678,6 +688,58 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
         </div>
       )}
 
+      {/* Payment Records Subpage */}
+      {!isSample && showPaymentPage && (
+        <div className="fixed inset-0 z-[70] bg-gray-50 overflow-y-auto">
+          <div className="max-w-6xl mx-auto p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold flex items-center gap-2"><CreditCard size={20} />回款记录</h2>
+                <p className="text-xs text-gray-400 mt-1">{paymentPageOrderId ? `当前订单：${(allData?.items ?? []).find((o: any) => o.id === paymentPageOrderId)?.orderNo ?? detailData?.orderNo ?? "-"}` : "全部销售订单回款记录"}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={() => openPaymentRegistration(paymentPageOrderId ?? undefined)}><Plus size={14} className="mr-1" />登记回款</Button>
+                <Button size="sm" variant="outline" onClick={() => { setShowPaymentPage(false); setShowPaymentForm(false); }}><X size={14} className="mr-1" />返回</Button>
+              </div>
+            </div>
+
+            <Card><CardContent className="p-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <Label className="text-xs text-gray-500">订单范围</Label>
+                <Select value={paymentPageOrderId ? String(paymentPageOrderId) : "all"} onValueChange={value => { setPaymentPageOrderId(value === "all" ? null : Number(value)); setShowPaymentForm(false); }}>
+                  <SelectTrigger className="w-[320px]"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="all">全部销售订单</SelectItem>{(allData?.items ?? []).map((order: any) => <SelectItem key={order.id} value={String(order.id)}>{order.orderNo} ｜ {order.customerName}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </CardContent></Card>
+
+            {showPaymentForm && (
+              <Card><CardContent className="p-4">
+                <form onSubmit={handlePaymentSubmit} className="space-y-3">
+                  <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">登记回款</h3><Button type="button" variant="ghost" size="sm" onClick={() => setShowPaymentForm(false)}><X size={14} /></Button></div>
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                    <div><Label className="text-xs">销售订单 *</Label><Select value={paymentForm.orderId ? String(paymentForm.orderId) : ""} onValueChange={value => openPaymentRegistration(Number(value))}><SelectTrigger><SelectValue placeholder="选择订单" /></SelectTrigger><SelectContent>{(allData?.items ?? []).map((order: any) => <SelectItem key={order.id} value={String(order.id)}>{order.orderNo} ｜ {order.customerName}</SelectItem>)}</SelectContent></Select></div>
+                    <div><Label className="text-xs">回款金额 *</Label><Input type="number" min="0.01" step="0.01" value={paymentForm.amount} onChange={e => setPaymentForm(p => ({ ...p, amount: e.target.value }))} /></div>
+                    <div><Label className="text-xs">回款日期 *</Label><Input type="date" value={paymentForm.paymentDate} onChange={e => setPaymentForm(p => ({ ...p, paymentDate: e.target.value }))} /></div>
+                    <div><Label className="text-xs">回款方式</Label><Select value={paymentForm.paymentMethod} onValueChange={v => setPaymentForm(p => ({ ...p, paymentMethod: v }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["银行转账", "承兑汇票", "支票", "现金", "其他"].map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent></Select></div>
+                    <div><Label className="text-xs">付款方</Label><Input value={paymentForm.payerName} onChange={e => setPaymentForm(p => ({ ...p, payerName: e.target.value }))} /></div>
+                  </div>
+                  <div><Label className="text-xs">备注</Label><Input value={paymentForm.notes} onChange={e => setPaymentForm(p => ({ ...p, notes: e.target.value }))} placeholder="填写本次回款备注" /></div>
+                  <div className="flex justify-end"><Button type="submit" size="sm" disabled={recordPaymentMutation.isPending}>保存回款</Button></div>
+                </form>
+              </CardContent></Card>
+            )}
+
+            <Card><CardContent className="p-0">
+              {(paymentsData?.items ?? []).length > 0 ? <Table>
+                <TableHeader><TableRow><TableHead>订单号</TableHead><TableHead>客户</TableHead><TableHead>日期</TableHead><TableHead className="text-right">金额</TableHead><TableHead>方式</TableHead><TableHead>付款方 / 备注</TableHead><TableHead className="w-12" /></TableRow></TableHeader>
+                <TableBody>{(paymentsData?.items ?? []).map((payment: any) => <TableRow key={payment.id}><TableCell className="font-medium">{payment.orderNo || "-"}</TableCell><TableCell>{payment.customerName || "-"}</TableCell><TableCell>{payment.paymentDate || "-"}</TableCell><TableCell className="text-right font-semibold text-green-600">{privacyMode ? "****" : `¥${Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</TableCell><TableCell>{payment.paymentMethod || "-"}</TableCell><TableCell><div>{payment.payerName || "-"}</div>{payment.notes && <div className="text-xs text-gray-400 mt-0.5">{payment.notes}</div>}</TableCell><TableCell><Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { if (confirm("确定删除这条回款记录？")) deletePaymentMutation.mutate({ id: payment.id }); }}><Trash2 size={14} className="text-red-400" /></Button></TableCell></TableRow>)}</TableBody>
+              </Table> : <div className="py-16 text-center text-sm text-gray-400">暂无回款记录</div>}
+            </CardContent></Card>
+          </div>
+        </div>
+      )}
+
       {/* Detail Dialog */}
       {openDetail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -706,35 +768,12 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                     <><div className="w-px h-3 bg-gray-200" /><div className="flex items-center gap-1"><span className="text-gray-400 text-xs">退款</span>{privacyMode ? <span className="text-sm text-gray-300 tracking-widest">****</span> : <span className="font-semibold text-orange-600">¥{Number(detailData.refundedAmount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>}</div></>
                   )}
                 </div>}
-                <div className="mt-2"><div className="flex items-center justify-between text-xs mb-1"><span className="text-gray-400">发货进度</span><span className="text-gray-500">{Number(detailData.quantity) > 0 ? Math.round((Number(detailData.shippedTotal ?? 0) / Number(detailData.quantity)) * 100) : 0}%</span></div><div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${Number(detailData.quantity) > 0 ? Math.min(100, (Number(detailData.shippedTotal ?? 0) / Number(detailData.quantity)) * 100) : 0}%` }} /></div></div>
               </div>
 
               {!isSample && (
-                <div className="border rounded-lg overflow-hidden">
-                  <div className="bg-gray-50 px-4 py-2 flex items-center justify-between">
-                    <span className="text-xs font-semibold text-gray-500 flex items-center gap-1.5"><CreditCard size={14} />回款记录</span>
-                    <Button size="sm" className="h-7 text-xs" onClick={openPaymentRegistration}><Plus size={13} className="mr-1" />登记回款</Button>
-                  </div>
-                  {showPaymentForm && (
-                    <form onSubmit={handlePaymentSubmit} className="p-4 border-b bg-blue-50/40 space-y-3">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <div><Label className="text-xs">回款金额 *</Label><Input type="number" min="0.01" step="0.01" value={paymentForm.amount} onChange={e => setPaymentForm(p => ({ ...p, amount: e.target.value }))} /></div>
-                        <div><Label className="text-xs">回款日期 *</Label><Input type="date" value={paymentForm.paymentDate} onChange={e => setPaymentForm(p => ({ ...p, paymentDate: e.target.value }))} /></div>
-                        <div><Label className="text-xs">回款方式</Label><Select value={paymentForm.paymentMethod} onValueChange={v => setPaymentForm(p => ({ ...p, paymentMethod: v }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["银行转账", "承兑汇票", "支票", "现金", "其他"].map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent></Select></div>
-                        <div><Label className="text-xs">付款方</Label><Input value={paymentForm.payerName} onChange={e => setPaymentForm(p => ({ ...p, payerName: e.target.value }))} /></div>
-                      </div>
-                      <div><Label className="text-xs">备注</Label><Input value={paymentForm.notes} onChange={e => setPaymentForm(p => ({ ...p, notes: e.target.value }))} placeholder="填写本次回款备注" /></div>
-                      <div className="flex justify-end gap-2"><Button type="button" size="sm" variant="outline" onClick={() => setShowPaymentForm(false)}>取消</Button><Button type="submit" size="sm" disabled={recordPaymentMutation.isPending}>保存回款</Button></div>
-                    </form>
-                  )}
-                  {(paymentsData?.items ?? []).length > 0 ? (
-                    <Table>
-                      <TableHeader><TableRow><TableHead className="text-xs">日期</TableHead><TableHead className="text-xs text-right">金额</TableHead><TableHead className="text-xs">方式</TableHead><TableHead className="text-xs">付款方 / 备注</TableHead><TableHead className="w-10" /></TableRow></TableHeader>
-                      <TableBody>{(paymentsData?.items ?? []).map((payment: any) => (
-                        <TableRow key={payment.id}><TableCell className="text-xs">{payment.paymentDate || "-"}</TableCell><TableCell className="text-xs text-right font-semibold text-green-600">{privacyMode ? "****" : `¥${Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</TableCell><TableCell className="text-xs">{payment.paymentMethod || "-"}</TableCell><TableCell className="text-xs"><div>{payment.payerName || "-"}</div>{payment.notes && <div className="text-gray-400 mt-0.5">{payment.notes}</div>}</TableCell><TableCell><Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { if (confirm("确定删除这条回款记录？")) deletePaymentMutation.mutate({ id: payment.id }); }}><Trash2 size={13} className="text-red-400" /></Button></TableCell></TableRow>
-                      ))}</TableBody>
-                    </Table>
-                  ) : <div className="py-6 text-center text-xs text-gray-400">暂无回款记录</div>}
+                <div className="border rounded-lg p-3 flex items-center justify-between bg-blue-50/40">
+                  <div><div className="text-sm font-medium text-gray-700 flex items-center gap-1.5"><CreditCard size={15} />回款记录</div><div className="text-xs text-gray-400 mt-1">查看历史回款或登记新的回款</div></div>
+                  <Button size="sm" variant="outline" onClick={() => openPaymentPage(detailData.id)}>进入回款记录</Button>
                 </div>
               )}
 
@@ -877,22 +916,22 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                           ) : (
                             <span className="w-[132px] flex-shrink-0 text-xs text-gray-400">{s.paymentDueDate ? new Date(s.paymentDueDate).toLocaleDateString() + " (已付)" : "—"}</span>
                           )}
-                          <div className="mx-1 h-5 w-px flex-shrink-0 bg-amber-200" />
+                        </div>}
+                        <div className="flex items-center gap-2 mb-3 p-2 bg-slate-50 rounded-md">
+                          <FileText size={12} className="text-slate-500 flex-shrink-0" />
                           <span className="text-xs text-gray-500 flex-shrink-0">批次备注:</span>
                           <input
                             type="text"
-                            className="h-6 min-w-0 flex-1 rounded border bg-white px-2 text-xs"
-                            placeholder="填写该批次的备注..."
+                            className="h-7 min-w-0 flex-1 rounded border bg-white px-2 text-xs cursor-text"
+                            placeholder="填写该批次的备注，已完成批次也可以修改..."
                             value={shipmentNotes[s.id] ?? s.batchNote ?? ""}
                             onChange={event => setShipmentNotes(current => ({ ...current, [s.id]: event.target.value }))}
                             onBlur={event => {
                               const note = event.target.value.trim();
-                              if (note !== (s.batchNote ?? "")) {
-                                updateShipmentNoteMutation.mutate({ orderId: detailData!.id, shipmentId: s.id, note });
-                              }
+                              if (note !== (s.batchNote ?? "")) updateShipmentNoteMutation.mutate({ orderId: detailData!.id, shipmentId: s.id, note });
                             }}
                           />
-                        </div>}
+                        </div>
                         <div className="flex items-center gap-2 pt-2 border-t">
                           {(() => {
                             const flowType = inferFlowType(s);
