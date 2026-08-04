@@ -41,9 +41,10 @@ export default function Dashboard() {
       value: stats?.orders.total ?? 0,
       unit: "笔",
       icon: ShoppingCart,
-      iconBg: "bg-blue-100",
-      iconColor: "text-blue-600",
-      accent: "border-l-blue-500",
+      surface: "from-blue-50 via-white to-white",
+      iconSurface: "bg-blue-600 shadow-blue-200",
+      valueColor: "text-blue-950",
+      dotColor: "bg-blue-500",
       trend: `应收 ¥${(Number(stats?.orders.totalAmount ?? 0) / 10000).toFixed(1)}万`,
     },
     {
@@ -51,9 +52,10 @@ export default function Dashboard() {
       value: stats?.sampleOrders?.total ?? 0,
       unit: "笔",
       icon: FileText,
-      iconBg: "bg-violet-100",
-      iconColor: "text-violet-600",
-      accent: "border-l-violet-500",
+      surface: "from-violet-50 via-white to-white",
+      iconSurface: "bg-violet-600 shadow-violet-200",
+      valueColor: "text-violet-950",
+      dotColor: "bg-violet-500",
       trend: `进行中 ${stats?.sampleOrders?.inProgress ?? 0} · 已完成 ${stats?.sampleOrders?.completed ?? 0}`,
     },
     {
@@ -61,9 +63,10 @@ export default function Dashboard() {
       value: stats?.orders.inProgress ?? 0,
       unit: "笔",
       icon: Package,
-      iconBg: "bg-amber-100",
-      iconColor: "text-amber-600",
-      accent: "border-l-amber-500",
+      surface: "from-amber-50 via-white to-white",
+      iconSurface: "bg-amber-500 shadow-amber-200",
+      valueColor: "text-amber-950",
+      dotColor: "bg-amber-500",
       trend: `待签收 ${stats?.orders.pendingReceipt ?? 0} · 待对账 ${stats?.orders.pendingReconciliation ?? 0}`,
     },
     {
@@ -71,9 +74,10 @@ export default function Dashboard() {
       value: stats?.customers.total ?? 0,
       unit: "家",
       icon: Users,
-      iconBg: "bg-green-100",
-      iconColor: "text-green-600",
-      accent: "border-l-green-500",
+      surface: "from-teal-50 via-white to-white",
+      iconSurface: "bg-teal-600 shadow-teal-200",
+      valueColor: "text-teal-950",
+      dotColor: "bg-teal-500",
       trend: `活跃 ${stats?.customers.active ?? 0} · 潜在 ${stats?.customers.potential ?? 0}`,
     },
     {
@@ -81,9 +85,10 @@ export default function Dashboard() {
       value: `¥${(Number(stats?.payments.monthTotal ?? 0) / 10000).toFixed(1)}`,
       unit: "万",
       icon: DollarSign,
-      iconBg: "bg-emerald-100",
-      iconColor: "text-emerald-600",
-      accent: "border-l-emerald-500",
+      surface: "from-emerald-50 via-white to-white",
+      iconSurface: "bg-emerald-600 shadow-emerald-200",
+      valueColor: "text-emerald-950",
+      dotColor: "bg-emerald-500",
       trend: `${stats?.payments.monthCount ?? 0} 笔回款`,
     },
   ];
@@ -108,20 +113,26 @@ export default function Dashboard() {
   return (
     <div className="space-y-5">
       {/* ===== 核心指标卡片 ===== */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
         {kpiCards.map((kpi) => {
           const Icon = kpi.icon;
           return (
-            <Card key={kpi.label} className={`min-w-0 overflow-hidden border-l-4 ${kpi.accent} shadow-sm`}>
-              <CardContent className="p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium text-gray-500 truncate">{kpi.label}</p>
-                  <div className={`w-7 h-7 ${kpi.iconBg} rounded-md flex items-center justify-center shrink-0`}>
-                    <Icon size={14} className={kpi.iconColor} />
+            <Card key={kpi.label} className={`group relative min-w-0 overflow-hidden border border-gray-200/80 bg-gradient-to-br ${kpi.surface} shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md`}>
+              <div className={`absolute -right-8 -top-10 h-24 w-24 rounded-full ${kpi.dotColor} opacity-[0.06] transition-transform duration-300 group-hover:scale-125`} />
+              <CardContent className="relative p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[12px] font-medium tracking-wide text-gray-500 truncate">{kpi.label}</p>
+                    <p className={`mt-2 text-[26px] leading-none font-bold tracking-tight whitespace-nowrap ${kpi.valueColor}`}>{kpi.value}<span className="ml-1 text-xs font-medium text-gray-400">{kpi.unit}</span></p>
+                  </div>
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-lg ${kpi.iconSurface}`}>
+                    <Icon size={19} strokeWidth={2} />
                   </div>
                 </div>
-                <p className="mt-1 text-lg font-bold text-gray-900 whitespace-nowrap">{kpi.value}<span className="text-[11px] font-normal text-gray-400 ml-0.5">{kpi.unit}</span></p>
-                <p className="mt-0.5 text-[11px] text-gray-400 truncate" title={kpi.trend}>{kpi.trend}</p>
+                <div className="mt-4 flex items-center gap-2 border-t border-gray-100/90 pt-3">
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${kpi.dotColor}`} />
+                  <p className="truncate text-[11px] font-medium text-gray-500" title={kpi.trend}>{kpi.trend}</p>
+                </div>
               </CardContent>
             </Card>
           );
