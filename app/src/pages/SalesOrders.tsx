@@ -22,6 +22,7 @@ import {
   Package, ClipboardCheck, Truck, FileText,
   RotateCcw, Clock, AlertTriangle, CheckCircle,
   CreditCard, Bell, History,
+  ArrowLeft,
 } from "lucide-react";
 
 const statusColors: Record<string, string> = {
@@ -157,8 +158,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
   );
   const { data: productsData } = trpc.product.list.useQuery({});
   const { data: paymentsData, refetch: refetchPayments } = trpc.finance.listPayments.useQuery(
-    { orderId: paymentPageOrderId ?? undefined, page: 1, pageSize: 200 },
-    { enabled: !isSample && showPaymentPage }
+    { orderId: paymentPageOrderId ?? undefined, page: 1, pageSize: 200 }
   );
 
   // 根据 productId 实时查询产品信息（产品修改后订单显示同步更新）
@@ -692,14 +692,14 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
       {!isSample && showPaymentPage && (
         <div className="fixed inset-0 z-[70] bg-gray-50 overflow-y-auto">
           <div className="max-w-6xl mx-auto p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold flex items-center gap-2"><CreditCard size={20} />回款记录</h2>
-                <p className="text-xs text-gray-400 mt-1">{paymentPageOrderId ? `当前订单：${(allData?.items ?? []).find((o: any) => o.id === paymentPageOrderId)?.orderNo ?? detailData?.orderNo ?? "-"}` : "全部销售订单回款记录"}</p>
-              </div>
-              <div className="flex gap-2">
+            <div className="space-y-3">
+              <Button size="sm" variant="ghost" className="-ml-2 text-gray-600" onClick={() => { setShowPaymentPage(false); setShowPaymentForm(false); }}><ArrowLeft size={17} className="mr-1" />返回销售订单</Button>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold flex items-center gap-2"><CreditCard size={20} />回款记录</h2>
+                  <p className="text-xs text-gray-400 mt-1">{paymentPageOrderId ? `当前订单：${(allData?.items ?? []).find((o: any) => o.id === paymentPageOrderId)?.orderNo ?? detailData?.orderNo ?? "-"}` : "全部销售订单回款记录"}</p>
+                </div>
                 <Button size="sm" onClick={() => openPaymentRegistration(paymentPageOrderId ?? undefined)}><Plus size={14} className="mr-1" />登记回款</Button>
-                <Button size="sm" variant="outline" onClick={() => { setShowPaymentPage(false); setShowPaymentForm(false); }}><X size={14} className="mr-1" />返回</Button>
               </div>
             </div>
 
@@ -733,7 +733,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
             <Card><CardContent className="p-0">
               {(paymentsData?.items ?? []).length > 0 ? <Table>
                 <TableHeader><TableRow><TableHead>订单号</TableHead><TableHead>客户</TableHead><TableHead>日期</TableHead><TableHead className="text-right">金额</TableHead><TableHead>方式</TableHead><TableHead>付款方 / 备注</TableHead><TableHead className="w-12" /></TableRow></TableHeader>
-                <TableBody>{(paymentsData?.items ?? []).map((payment: any) => <TableRow key={payment.id}><TableCell className="font-medium">{payment.orderNo || "-"}</TableCell><TableCell>{payment.customerName || "-"}</TableCell><TableCell>{payment.paymentDate || "-"}</TableCell><TableCell className="text-right font-semibold text-green-600">{privacyMode ? "****" : `¥${Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</TableCell><TableCell>{payment.paymentMethod || "-"}</TableCell><TableCell><div>{payment.payerName || "-"}</div>{payment.notes && <div className="text-xs text-gray-400 mt-0.5">{payment.notes}</div>}</TableCell><TableCell><Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { if (confirm("确定删除这条回款记录？")) deletePaymentMutation.mutate({ id: payment.id }); }}><Trash2 size={14} className="text-red-400" /></Button></TableCell></TableRow>)}</TableBody>
+                <TableBody>{[...(paymentsData?.items ?? [])].sort((a: any, b: any) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime()).map((payment: any) => <TableRow key={payment.id}><TableCell className="font-medium">{payment.orderNo || "-"}</TableCell><TableCell>{payment.customerName || "-"}</TableCell><TableCell>{payment.paymentDate || "-"}</TableCell><TableCell className="text-right font-semibold text-green-600">{privacyMode ? "****" : `¥${Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</TableCell><TableCell>{payment.paymentMethod || "-"}</TableCell><TableCell><div>{payment.payerName || "-"}</div>{payment.notes && <div className="text-xs text-gray-400 mt-0.5">{payment.notes}</div>}</TableCell><TableCell><Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { if (confirm("确定删除这条回款记录？")) deletePaymentMutation.mutate({ id: payment.id }); }}><Trash2 size={14} className="text-red-400" /></Button></TableCell></TableRow>)}</TableBody>
               </Table> : <div className="py-16 text-center text-sm text-gray-400">暂无回款记录</div>}
             </CardContent></Card>
           </div>
