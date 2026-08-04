@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router";
+import { Routes, Route, Navigate } from "react-router";
 import { Toaster } from "@/components/ui/sonner";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
@@ -9,7 +9,6 @@ import MetalPrices from "./pages/MetalPrices";
 
 import SalesOrders from "./pages/SalesOrders";
 import SampleOrders from "./pages/SampleOrders";
-import Finance from "./pages/Finance";
 import Reports from "./pages/Reports";
 import Products from "./pages/Products";
 import FilenameGenerator from "./pages/FilenameGenerator";
@@ -80,11 +79,7 @@ export default function App() {
       />
       <Route
         path="/finance"
-        element={
-          <Layout>
-            <Finance />
-          </Layout>
-        }
+        element={<Navigate to="/sales-orders" replace />}
       />
       <Route
         path="/reports"

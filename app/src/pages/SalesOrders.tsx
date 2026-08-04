@@ -111,6 +111,8 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
   const [pageSize, setPageSize] = useState(10);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [dueStartDate, setDueStartDate] = useState("");
+  const [dueEndDate, setDueEndDate] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -129,20 +131,33 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
   const [openReturnForm, setOpenReturnForm] = useState(false);
   const [returnShipmentId, setReturnShipmentId] = useState<number | null>(null);
   const [returnForm, setReturnForm] = useState({ quantity: "", reason: "" });
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({
+    orderId: 0, amount: "", paymentMethod: "银行转账",
+    paymentDate: new Date().toISOString().split("T")[0], payerName: "", notes: "",
+  });
 
   const { data, refetch } = orderApi.list.useQuery({
     search: search || undefined, status: statusFilter === "all" ? undefined : statusFilter,
-    startDate: startDate || undefined, endDate: endDate || undefined, page, pageSize,
+    startDate: startDate || undefined, endDate: endDate || undefined,
+    dueStartDate: !isSample ? dueStartDate || undefined : undefined,
+    dueEndDate: !isSample ? dueEndDate || undefined : undefined, page, pageSize,
   });
   // 获取全部数据用于导出
   const { data: allData } = orderApi.list.useQuery({
     search: search || undefined, status: statusFilter === "all" ? undefined : statusFilter,
-    startDate: startDate || undefined, endDate: endDate || undefined, page: 1, pageSize: 9999,
+    startDate: startDate || undefined, endDate: endDate || undefined,
+    dueStartDate: !isSample ? dueStartDate || undefined : undefined,
+    dueEndDate: !isSample ? dueEndDate || undefined : undefined, page: 1, pageSize: 9999,
   });
   const { data: detailData } = orderApi.getById.useQuery(
     { id: selectedOrder! }, { enabled: !!selectedOrder }
   );
   const { data: productsData } = trpc.product.list.useQuery({});
+  const { data: paymentsData, refetch: refetchPayments } = trpc.finance.listPayments.useQuery(
+    { orderId: selectedOrder ?? undefined, page: 1, pageSize: 200 },
+    { enabled: !isSample && !!selectedOrder }
+  );
 
   // 根据 productId 实时查询产品信息（产品修改后订单显示同步更新）
   const resolveProduct = (productId: number | null | undefined) => {
@@ -175,6 +190,19 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
   });
   const updateShipmentNoteMutation = orderApi.updateShipmentNote.useMutation({
     onSuccess: () => { toast.success("批次备注已保存"); refetch(); },
+    onError: (err: any) => toast.error(err.message),
+  });
+  const recordPaymentMutation = trpc.finance.recordPayment.useMutation({
+    onSuccess: () => {
+      toast.success("回款登记成功");
+      setShowPaymentForm(false);
+      refetchPayments();
+      refetch();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+  const deletePaymentMutation = trpc.finance.deletePayment.useMutation({
+    onSuccess: () => { toast.success("回款记录已删除"); refetchPayments(); refetch(); },
     onError: (err: any) => toast.error(err.message),
   });
   // 提醒
@@ -372,10 +400,51 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
     recordShipmentMutation.mutate({ orderId: detailData!.id, quantity: shippingForm.shippedQty, productName: shippingForm.productName, logisticsCompany: "", logisticsNo: "", productionTime: toIsoDateTime(shippingForm.productionTime) });
   };
 
+  const openPaymentRegistration = () => {
+    if (!detailData) return;
+    setPaymentForm({
+      orderId: detailData.id,
+      amount: Number(detailData.balance) > 0 ? Number(detailData.balance).toFixed(2) : "",
+      paymentMethod: "银行转账",
+      paymentDate: new Date().toISOString().split("T")[0],
+      payerName: detailData.customerName || "",
+      notes: "",
+    });
+    setShowPaymentForm(true);
+  };
+  const handlePaymentSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentForm.amount || Number(paymentForm.amount) <= 0) { toast.error("请填写回款金额"); return; }
+    recordPaymentMutation.mutate(paymentForm);
+  };
+
   const totalPages = Math.ceil((data?.total ?? 0) / (data?.pageSize ?? 10));
+  const salesSummary = (allData?.items ?? []).reduce((summary: any, order: any) => ({
+    receivable: summary.receivable + Number(order.totalAmount ?? 0),
+    received: summary.received + Number(order.receivedAmount ?? 0),
+    balance: summary.balance + Number(order.balance ?? 0),
+    overdue: summary.overdue + (order.isOverdue ? 1 : 0),
+  }), { receivable: 0, received: 0, balance: 0, overdue: 0 });
 
   return (
     <div className="space-y-4">
+      {!isSample && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            ["应收总额", salesSummary.receivable, "text-gray-800"],
+            ["已回款", salesSummary.received, "text-green-600"],
+            ["待回款", salesSummary.balance, "text-red-600"],
+            ["逾期订单", salesSummary.overdue, "text-orange-600"],
+          ].map(([label, value, color], index) => (
+            <Card key={String(label)}><CardContent className="p-3">
+              <div className="text-xs text-gray-400">{label}</div>
+              <div className={`mt-1 text-lg font-semibold ${color}`}>
+                {index === 3 ? `${value} 单` : privacyMode ? "****" : `¥${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              </div>
+            </CardContent></Card>
+          ))}
+        </div>
+      )}
       {/* Toolbar */}
       <Card><CardContent className="p-4">
         <div className="flex flex-wrap gap-3 items-center">
@@ -411,6 +480,16 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
           <Button size="sm" variant="outline" onClick={() => setShowExportDialog(true)}><FileText size={16} className="mr-1" />导出</Button>
           <Button size="sm" onClick={() => { resetForm(); setIsEditing(false); setShowForm(true); }}><Plus size={16} className="mr-1" />新建</Button>
         </div>
+        {!isSample && (
+          <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t">
+            <span className="text-xs font-medium text-gray-500">回款到期日</span>
+            <input type="date" value={dueStartDate} onChange={e => { setDueStartDate(e.target.value); setPage(1); }} className="h-8 border rounded-md px-2 text-sm" />
+            <span className="text-gray-400">-</span>
+            <input type="date" value={dueEndDate} onChange={e => { setDueEndDate(e.target.value); setPage(1); }} className="h-8 border rounded-md px-2 text-sm" />
+            {(dueStartDate || dueEndDate) && <Button size="sm" variant="ghost" onClick={() => { setDueStartDate(""); setDueEndDate(""); setPage(1); }}>清除到期日</Button>}
+            <span className="text-xs text-gray-400">仅查询尚未回款的到期批次</span>
+          </div>
+        )}
       </CardContent></Card>
 
       {/* Order List */}
@@ -450,7 +529,7 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                   {!(order.items ?? []).length && <div className="text-xs text-gray-500">{order.productName}</div>}
                 </TableCell>
                 <TableCell className="py-3 text-right"><span className="text-sm font-medium text-gray-700">{order.quantity}</span><span className="text-xs text-gray-400 ml-1">kg</span></TableCell>
-                {!isSample && <TableCell className="py-3 text-right">{privacyMode ? <span className="text-sm text-gray-300 tracking-widest">****</span> : <span className="text-sm font-semibold text-gray-900">¥{Number(order.totalAmount).toLocaleString()}</span>}</TableCell>}
+                {!isSample && <TableCell className="py-3 text-right">{privacyMode ? <span className="text-sm text-gray-300 tracking-widest">****</span> : <div><div className="text-sm font-semibold text-gray-900">¥{Number(order.totalAmount).toLocaleString()}</div><div className="text-[10px] text-green-600">已收 ¥{Number(order.receivedAmount).toLocaleString()}</div><div className="text-[10px] text-red-500">未收 ¥{Number(order.balance).toLocaleString()}</div></div>}</TableCell>}
                 <TableCell className="py-3 text-center"><Badge className={`${statusColors[order.orderStatus] ?? ""} text-xs px-2.5 py-0.5 rounded-full`}>{order.orderStatus}</Badge></TableCell>
                 <TableCell className="py-3 text-right">
                   <div className="flex justify-end gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
@@ -629,6 +708,35 @@ export default function SalesOrders({ mode = "sales" }: { mode?: "sales" | "samp
                 </div>}
                 <div className="mt-2"><div className="flex items-center justify-between text-xs mb-1"><span className="text-gray-400">发货进度</span><span className="text-gray-500">{Number(detailData.quantity) > 0 ? Math.round((Number(detailData.shippedTotal ?? 0) / Number(detailData.quantity)) * 100) : 0}%</span></div><div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${Number(detailData.quantity) > 0 ? Math.min(100, (Number(detailData.shippedTotal ?? 0) / Number(detailData.quantity)) * 100) : 0}%` }} /></div></div>
               </div>
+
+              {!isSample && (
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-4 py-2 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-500 flex items-center gap-1.5"><CreditCard size={14} />回款记录</span>
+                    <Button size="sm" className="h-7 text-xs" onClick={openPaymentRegistration}><Plus size={13} className="mr-1" />登记回款</Button>
+                  </div>
+                  {showPaymentForm && (
+                    <form onSubmit={handlePaymentSubmit} className="p-4 border-b bg-blue-50/40 space-y-3">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div><Label className="text-xs">回款金额 *</Label><Input type="number" min="0.01" step="0.01" value={paymentForm.amount} onChange={e => setPaymentForm(p => ({ ...p, amount: e.target.value }))} /></div>
+                        <div><Label className="text-xs">回款日期 *</Label><Input type="date" value={paymentForm.paymentDate} onChange={e => setPaymentForm(p => ({ ...p, paymentDate: e.target.value }))} /></div>
+                        <div><Label className="text-xs">回款方式</Label><Select value={paymentForm.paymentMethod} onValueChange={v => setPaymentForm(p => ({ ...p, paymentMethod: v }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["银行转账", "承兑汇票", "支票", "现金", "其他"].map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent></Select></div>
+                        <div><Label className="text-xs">付款方</Label><Input value={paymentForm.payerName} onChange={e => setPaymentForm(p => ({ ...p, payerName: e.target.value }))} /></div>
+                      </div>
+                      <div><Label className="text-xs">备注</Label><Input value={paymentForm.notes} onChange={e => setPaymentForm(p => ({ ...p, notes: e.target.value }))} placeholder="填写本次回款备注" /></div>
+                      <div className="flex justify-end gap-2"><Button type="button" size="sm" variant="outline" onClick={() => setShowPaymentForm(false)}>取消</Button><Button type="submit" size="sm" disabled={recordPaymentMutation.isPending}>保存回款</Button></div>
+                    </form>
+                  )}
+                  {(paymentsData?.items ?? []).length > 0 ? (
+                    <Table>
+                      <TableHeader><TableRow><TableHead className="text-xs">日期</TableHead><TableHead className="text-xs text-right">金额</TableHead><TableHead className="text-xs">方式</TableHead><TableHead className="text-xs">付款方 / 备注</TableHead><TableHead className="w-10" /></TableRow></TableHeader>
+                      <TableBody>{(paymentsData?.items ?? []).map((payment: any) => (
+                        <TableRow key={payment.id}><TableCell className="text-xs">{payment.paymentDate || "-"}</TableCell><TableCell className="text-xs text-right font-semibold text-green-600">{privacyMode ? "****" : `¥${Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</TableCell><TableCell className="text-xs">{payment.paymentMethod || "-"}</TableCell><TableCell className="text-xs"><div>{payment.payerName || "-"}</div>{payment.notes && <div className="text-gray-400 mt-0.5">{payment.notes}</div>}</TableCell><TableCell><Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { if (confirm("确定删除这条回款记录？")) deletePaymentMutation.mutate({ id: payment.id }); }}><Trash2 size={13} className="text-red-400" /></Button></TableCell></TableRow>
+                      ))}</TableBody>
+                    </Table>
+                  ) : <div className="py-6 text-center text-xs text-gray-400">暂无回款记录</div>}
+                </div>
+              )}
 
               {/* Product Items */}
               <div className="border rounded-lg overflow-hidden">

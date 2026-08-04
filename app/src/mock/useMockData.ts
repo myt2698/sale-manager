@@ -1104,6 +1104,15 @@ export function useMockTrpc() {
             return d <= end;
           });
         }
+        if (input?.dueStartDate || input?.dueEndDate) {
+          const dueStart = input?.dueStartDate ? new Date(`${input.dueStartDate}T00:00:00`).getTime() : Number.NEGATIVE_INFINITY;
+          const dueEnd = input?.dueEndDate ? new Date(`${input.dueEndDate}T23:59:59`).getTime() : Number.POSITIVE_INFINITY;
+          items = items.filter((o: any) => (shipments[o.id] ?? []).some((s: any) => {
+            if (!s.paymentDueDate || s.paymentStatus === "已支付") return false;
+            const dueTime = new Date(s.paymentDueDate).getTime();
+            return dueTime >= dueStart && dueTime <= dueEnd;
+          }));
+        }
         // 按订单日期降序排列（最新的在前）
         items.sort((a: any, b: any) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
         const offset = (page - 1) * pageSize;
